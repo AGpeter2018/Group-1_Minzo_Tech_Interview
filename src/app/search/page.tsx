@@ -40,8 +40,8 @@ const FIGMA_SEARCH_RESULTS = [
     id: 'bomi-govt-hospital',
     name: 'Liberia Government Hospital (Tubmanburg)',
     category_name: 'Hospital',
-    rating: 4.0,
-    review_count: 116,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Tubmanburg',
     county: 'Bomi County',
@@ -53,8 +53,8 @@ const FIGMA_SEARCH_RESULTS = [
     id: 'harmony-bridge-pharmacy',
     name: 'Harmony Bridge Pharmacy',
     category_name: 'Pharmacies',
-    rating: 5.0,
-    review_count: 198,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Main Street, Bomi Hills',
     county: 'Bomi County',
@@ -66,8 +66,8 @@ const FIGMA_SEARCH_RESULTS = [
     id: 'buchanan-govt-hospital',
     name: 'Liberia Government Hospital (Buchanan)',
     category_name: 'Hospital',
-    rating: 3.0,
-    review_count: 116,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Tubmanburg',
     county: 'Bomi County',
@@ -140,7 +140,8 @@ function SearchPageContent() {
               emergency_services,
               services_raw,
               opening_hours_raw
-            )
+            ),
+            reviews(rating)
           `)
           .order('name');
 
@@ -156,12 +157,24 @@ function SearchPageContent() {
                 : `${b.county} County`
               : fallback.county;
 
+            const revs = b.reviews || [];
+            const reviewCount = revs.length;
+            const avgRating =
+              reviewCount > 0
+                ? Number(
+                    (
+                      revs.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
+                      reviewCount
+                    ).toFixed(1)
+                  )
+                : null;
+
             return {
               id: b.id,
               name: b.name || fallback.name,
               category_name: b.category?.name || fallback.category_name,
-              rating: fallback.rating,
-              review_count: fallback.review_count,
+              rating: avgRating,
+              review_count: reviewCount,
               verification_status: b.verification_status || fallback.verification_status,
               town: b.town || b.address || fallback.town,
               county: countyName,

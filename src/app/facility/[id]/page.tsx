@@ -27,7 +27,26 @@ import {
 import { supabase } from '@/lib/supabase';
 import { getCountyCoordinates } from '@/lib/location';
 
-// Default mockup data matching Figma node 342:1000
+// Helper to format relative time for database review timestamps
+function formatRelativeTime(dateString?: string) {
+  if (!dateString) return 'Recently';
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffMs = now.getTime() - past.getTime();
+  const diffSecs = Math.max(0, Math.floor(diffMs / 1000));
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+
+  if (diffWeeks > 0) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+  if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffMins > 0) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+  return 'Just now';
+}
+
+// Fallback layout metadata matching Figma node 342:1000 (ratings strictly null until loaded from DB)
 const FIGMA_DEFAULT_FACILITY = {
   id: 'bomi-govt-hospital',
   name: 'Liberia Government Hospital (Tubmanburg)',
@@ -37,32 +56,13 @@ const FIGMA_DEFAULT_FACILITY = {
   phone: '+231886410594',
   website_url: 'www.liberiagovernment.com',
   verification_status: 'verified',
-  average_rating: 4.0,
-  review_count: 116,
+  average_rating: null,
+  review_count: 0,
   photo: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80',
   description:
     'A government Hospital with the best equipment and expert doctors and practitioners always available to serve your health needs.',
   opening_hours: '7:00Am - 9:00PM',
 };
-
-const FIGMA_DEFAULT_REVIEWS = [
-  {
-    id: 'f-rev-1',
-    name: 'Andrew John',
-    rating: 4,
-    timeAgo: '3 weeks ago',
-    comment: 'The doctors are very professional and attentive.',
-    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=200&q=80',
-  },
-  {
-    id: 'f-rev-2',
-    name: 'Andrew John',
-    rating: 4,
-    timeAgo: '3 weeks ago',
-    comment: 'The doctors are very professional and attentive.',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-  },
-];
 
 export default function BusinessProfilePage() {
   const params = useParams();
@@ -70,7 +70,7 @@ export default function BusinessProfilePage() {
   const facilityId = params?.id as string;
 
   const [facility, setFacility] = useState<any>(FIGMA_DEFAULT_FACILITY);
-  const [reviews, setReviews] = useState<any[]>(FIGMA_DEFAULT_REVIEWS);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
 
@@ -114,6 +114,35 @@ export default function BusinessProfilePage() {
           .eq('id', facilityId)
           .maybeSingle();
 
+        // Fetch reviews solely from database
+        const { data: dbRevs } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('business_id', facilityId)
+          .order('created_at', { ascending: false });
+
+        const mappedDbRevs = (dbRevs || []).map((r: any) => ({
+          id: r.id,
+          name: r.reviewer_name_display || 'Verified Patient',
+          rating: Number(r.rating) || 5,
+          timeAgo: formatRelativeTime(r.created_at),
+          comment: r.comment || '',
+          avatar: null,
+        }));
+
+        const revCount = mappedDbRevs.length;
+        const avgRating =
+          revCount > 0
+            ? Number(
+                (
+                  mappedDbRevs.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
+                  revCount
+                ).toFixed(1)
+              )
+            : null;
+
+        setReviews(mappedDbRevs);
+
         if (data) {
           const details = Array.isArray(data.healthcare_facility_details)
             ? data.healthcare_facility_details[0]
@@ -139,33 +168,18 @@ export default function BusinessProfilePage() {
             phone: data.phone || FIGMA_DEFAULT_FACILITY.phone,
             website_url: data.website_url || FIGMA_DEFAULT_FACILITY.website_url,
             verification_status: data.verification_status || 'unverified',
-            average_rating: 4.0,
-            review_count: 116,
+            average_rating: avgRating,
+            review_count: revCount,
             photo: FIGMA_DEFAULT_FACILITY.photo,
             description: details?.additional_notes || FIGMA_DEFAULT_FACILITY.description,
             opening_hours: details?.opening_hours_raw || FIGMA_DEFAULT_FACILITY.opening_hours,
           });
         } else {
-          setFacility(FIGMA_DEFAULT_FACILITY);
-        }
-
-        // Fetch live reviews if any exist
-        const { data: dbRevs } = await supabase
-          .from('reviews')
-          .select('*')
-          .eq('business_id', facilityId)
-          .order('created_at', { ascending: false });
-
-        if (dbRevs && dbRevs.length > 0) {
-          const mappedDbRevs = dbRevs.map((r: any) => ({
-            id: r.id,
-            name: r.reviewer_name_display || 'Verified Patient',
-            rating: r.rating || 5,
-            timeAgo: 'Recently',
-            comment: r.comment || '',
-            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          }));
-          setReviews(mappedDbRevs);
+          setFacility({
+            ...FIGMA_DEFAULT_FACILITY,
+            average_rating: avgRating,
+            review_count: revCount,
+          });
         }
       } catch (err) {
         console.warn('Failed to load facility data, using fallback:', err);
@@ -217,10 +231,23 @@ export default function BusinessProfilePage() {
         rating: ratingInput,
         timeAgo: 'Just now',
         comment: commentInput.trim(),
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+        avatar: null,
       };
 
-      setReviews((prev) => [createdReview, ...prev]);
+      setReviews((prev) => {
+        const updated = [createdReview, ...prev];
+        const newCount = updated.length;
+        const newAvg = Number(
+          (updated.reduce((sum, r) => sum + (r.rating || 0), 0) / newCount).toFixed(1)
+        );
+        setFacility((prevFac: any) => ({
+          ...prevFac,
+          average_rating: newAvg,
+          review_count: newCount,
+        }));
+        return updated;
+      });
+
       setReviewSuccess('Thank you! Your review has been published.');
       setCommentInput('');
       setReviewerNameInput('');
@@ -291,9 +318,23 @@ export default function BusinessProfilePage() {
               {/* Rating & Verified Badge (Figma Node 342:1013 - Frame 21) */}
               <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1.5 text-base font-medium text-black">
-                  <Star className="w-5 h-5 fill-[#FFCD0F] text-[#FFCD0F]" />
-                  <span>{facility.average_rating ? Number(facility.average_rating).toFixed(1) : '4.0'}</span>
-                  <span>({facility.review_count || 116} reviews)</span>
+                  <Star
+                    className={`w-5 h-5 ${
+                      facility.review_count > 0 && facility.average_rating
+                        ? 'fill-[#FFCD0F] text-[#FFCD0F]'
+                        : 'text-gray-300'
+                    }`}
+                  />
+                  {facility.review_count > 0 && facility.average_rating ? (
+                    <>
+                      <span>{Number(facility.average_rating).toFixed(1)}</span>
+                      <span className="text-gray-500 font-normal">
+                        ({facility.review_count} {facility.review_count === 1 ? 'review' : 'reviews'})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-gray-500 font-normal">No reviews yet</span>
+                  )}
                 </div>
 
                 {isVerified ? (
@@ -561,16 +602,20 @@ export default function BusinessProfilePage() {
           {/* Reviews Content Grid (Figma Node 342:1127 - Frame 101) */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
             {/* Left Rating Card (Figma Node 342:1128 - Frame 82) */}
-            <div className="md:col-span-4 w-full sm:w-53 h-35.75 rounded-xl border border-black/15 bg-white p-4 flex flex-col items-center justify-center space-y-1.5 shadow-2xs">
+            <div className="md:col-span-4 w-full sm:w-53 rounded-xl border border-black/15 bg-white p-5 flex flex-col items-center justify-center space-y-2 shadow-2xs">
               <span className="text-3xl font-medium text-black">
-                {facility.average_rating ? Number(facility.average_rating).toFixed(1) : '4.0'}
+                {facility.review_count > 0 && facility.average_rating
+                  ? Number(facility.average_rating).toFixed(1)
+                  : '0.0'}
               </span>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star
                     key={star}
                     className={`w-5 h-5 ${
-                      star <= Math.round(Number(facility.average_rating || 4.0))
+                      facility.review_count > 0 &&
+                      facility.average_rating &&
+                      star <= Math.round(Number(facility.average_rating))
                         ? 'fill-[#FFCD0F] text-[#FFCD0F]'
                         : 'text-gray-300'
                     }`}
@@ -578,53 +623,80 @@ export default function BusinessProfilePage() {
                 ))}
               </div>
               <span className="text-sm font-medium text-black">
-                ({facility.review_count || 116} reviews)
+                ({facility.review_count || 0} {facility.review_count === 1 ? 'review' : 'reviews'})
               </span>
             </div>
 
-            {/* Right Reviews List (Figma Node 342:1129, 342:1140) */}
-            <div className="md:col-span-8 space-y-6 divide-y divide-black/10">
-              {reviews.map((rev, index) => (
-                <div key={rev.id || index} className={index > 0 ? 'pt-6' : ''}>
-                  <div className="flex items-start gap-4">
-                    <img
-                      src={rev.avatar}
-                      alt={rev.name}
-                      className="w-12 h-12 rounded-full object-cover shrink-0 bg-gray-100"
-                    />
+            {/* Right Reviews List */}
+            <div className="md:col-span-8 space-y-6">
+              {reviews.length > 0 ? (
+                <div className="space-y-6 divide-y divide-black/10">
+                  {reviews.map((rev, index) => (
+                    <div key={rev.id || index} className={index > 0 ? 'pt-6' : ''}>
+                      <div className="flex items-start gap-4">
+                        {rev.avatar ? (
+                          <img
+                            src={rev.avatar}
+                            alt={rev.name}
+                            className="w-12 h-12 rounded-full object-cover shrink-0 bg-gray-100"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-[#163B65]/10 text-[#163B65] font-bold flex items-center justify-center shrink-0 uppercase text-sm">
+                            {rev.name ? rev.name.charAt(0) : 'P'}
+                          </div>
+                        )}
 
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-base font-semibold text-black">
-                          {rev.name}
-                        </h3>
-                      </div>
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-black">
+                              {rev.name}
+                            </h3>
+                          </div>
 
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <Star
-                              key={s}
-                              className={`w-4 h-4 ${
-                                s <= rev.rating
-                                  ? 'fill-[#FFCD0F] text-[#FFCD0F]'
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`w-4 h-4 ${
+                                    s <= rev.rating
+                                      ? 'fill-[#FFCD0F] text-[#FFCD0F]'
+                                      : 'text-gray-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-xs text-gray-500 font-medium">
+                              ({rev.timeAgo || 'Recently'})
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-black/90 font-normal leading-relaxed">
+                            {rev.comment}
+                          </p>
                         </div>
-                        <span className="text-xs text-gray-500 font-medium">
-                          ({rev.timeAgo || '3 weeks ago'})
-                        </span>
                       </div>
-
-                      <p className="text-sm text-black/90 font-normal leading-relaxed">
-                        {rev.comment}
-                      </p>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center space-y-3 bg-gray-50/50">
+                  <div className="w-12 h-12 rounded-full bg-blue-50 text-[#163B65] flex items-center justify-center mx-auto">
+                    <Star className="w-6 h-6 text-[#163B65]" />
+                  </div>
+                  <h4 className="text-base font-semibold text-black">No reviews yet</h4>
+                  <p className="text-sm text-gray-600 max-w-sm mx-auto">
+                    Be the first to share your experience with {facility.name}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setReviewModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#163B65] text-white text-sm font-semibold rounded-lg hover:bg-[#0f2845] transition cursor-pointer"
+                  >
+                    <span>Write the First Review</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </section>

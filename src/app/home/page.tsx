@@ -41,8 +41,8 @@ const FIGMA_FEATURED_FACILITIES = [
     id: 'bomi-govt-hospital',
     name: 'Liberia Government Hospital (Tubmanburg)',
     category: { name: 'Hospital' },
-    rating: 4.0,
-    review_count: 116,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Tubmanburg',
     county: 'Bomi County',
@@ -54,8 +54,8 @@ const FIGMA_FEATURED_FACILITIES = [
     id: 'harmony-bridge-pharmacy',
     name: 'Harmony Bridge Pharmacy',
     category: { name: 'Pharmacy' },
-    rating: 5.0,
-    review_count: 198,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Main Street, Bomi Hills',
     county: 'Bomi County',
@@ -67,8 +67,8 @@ const FIGMA_FEATURED_FACILITIES = [
     id: 'buchanan-govt-hospital',
     name: 'Liberia Government Hospital (Buchanan)',
     category: { name: 'Hospital' },
-    rating: 3.0,
-    review_count: 116,
+    rating: null,
+    review_count: 0,
     verification_status: 'verified',
     town: 'Buchanan',
     county: 'Grand Bassa County',
@@ -141,7 +141,8 @@ export default function AuthenticatedLandingPage() {
             healthcare_facility_details(
               facility_type,
               emergency_services
-            )
+            ),
+            reviews(rating)
           `)
           .limit(4);
 
@@ -159,12 +160,24 @@ export default function AuthenticatedLandingPage() {
                 : `${b.county} County`
               : fallback.county;
 
+            const revs = b.reviews || [];
+            const reviewCount = revs.length;
+            const avgRating =
+              reviewCount > 0
+                ? Number(
+                    (
+                      revs.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
+                      reviewCount
+                    ).toFixed(1)
+                  )
+                : null;
+
             return {
               id: b.id,
               name: b.name || fallback.name,
               category: { name: b.category?.name || fallback.category.name },
-              rating: fallback.rating,
-              review_count: fallback.review_count,
+              rating: avgRating,
+              review_count: reviewCount,
               verification_status: b.verification_status || fallback.verification_status,
               town: b.town || b.address || fallback.town,
               county: countyName,
@@ -238,14 +251,11 @@ export default function AuthenticatedLandingPage() {
         <div className="relative rounded-3xl overflow-hidden min-h-75 md:min-h-85 flex flex-col justify-between p-6 sm:p-10 md:p-12 shadow-md">
           {/* Hero Background Image with Darkness Filter */}
           <div
-            className="absolute inset-0 bg-cover bg-center -z-10"
+            className="absolute inset-0 bg-cover bg-center pointer-events-none"
             style={{
-              backgroundImage: `url('https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1600&q=80')`,
+              backgroundImage: 'url("/hero-image.png")',
             }}
-          >
-            {/* Dark Gradient Overlay for Readability */}
-            <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/70 to-black/40" />
-          </div>
+          />
 
           {/* Hero Content */}
           <div className="max-w-xl z-10 space-y-3">
