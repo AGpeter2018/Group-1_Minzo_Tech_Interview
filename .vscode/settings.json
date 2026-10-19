@@ -3,4 +3,6 @@
     "*.css": "tailwindcss"
   },
   "css.lint.unknownAtRules": "ignore"
+  "python.terminal.useEnvFile": true,
+  "python.envFile": "${workspaceFolder}/.env"
 }
