@@ -1,4 +1,3 @@
-// Next.js 16 Canary module declaration shims
 declare module 'next/types.js' {
   export type ResolvingMetadata = any;
   export type ResolvingViewport = any;
@@ -9,4 +8,18 @@ declare module 'next/types.js' {
 declare module 'next/server.js' {
   export type NextRequest = any;
   export type NextResponse = any;
+  export const NextRequest: any;
+  export const NextResponse: any;
+}
+
+declare module 'next/server' {
+  export type NextRequest = any;
+  export type NextResponse = any;
+  export const NextRequest: any;
+  export const NextResponse: any;
+}
+
+declare module 'groq-sdk' {
+  const Groq: any;
+  export default Groq;
 }
