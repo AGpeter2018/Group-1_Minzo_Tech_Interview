@@ -289,7 +289,7 @@ export function AiChatbot() {
         <div
           role="dialog"
           aria-label="Minzo AI Assistant"
-          className="fixed bottom-24 right-4 sm:right-6 z-50 w-[calc(100vw-32px)] sm:w-[460px] md:w-[500px] h-[640px] max-h-[84vh] bg-white rounded-3xl shadow-[0_12px_48px_rgba(0,0,0,0.18)] border border-gray-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200"
+          className="fixed bottom-24 right-4 sm:right-6 z-50 w-[calc(100vw-32px)] sm:w-115 md:w-125 h-160 max-h-[84vh] bg-white rounded-3xl shadow-[0_12px_48px_rgba(0,0,0,0.18)] border border-gray-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-200"
         >
           {/* Top Bar Header */}
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
