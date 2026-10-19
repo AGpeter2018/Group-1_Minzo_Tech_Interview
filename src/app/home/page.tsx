@@ -131,16 +131,16 @@ export default function AuthenticatedLandingPage() {
             id,
             name,
             address,
+            town,
+            county,
             phone,
-            email,
-            website,
+            public_email,
+            website_url,
             verification_status,
-            category_id,
-            categories(name),
+            category:categories(name),
             healthcare_facility_details(
-              emergency_services,
-              ambulance_available,
-              facility_type
+              facility_type,
+              emergency_services
             )
           `)
           .limit(4);
@@ -153,17 +153,23 @@ export default function AuthenticatedLandingPage() {
         if (data && data.length > 0) {
           const mapped = data.map((b: any, index: number) => {
             const fallback = FIGMA_FEATURED_FACILITIES[index % FIGMA_FEATURED_FACILITIES.length];
+            const countyName = b.county
+              ? b.county.toLowerCase().includes('county')
+                ? b.county
+                : `${b.county} County`
+              : fallback.county;
+
             return {
               id: b.id,
               name: b.name || fallback.name,
-              category: { name: b.categories?.name || fallback.category.name },
+              category: { name: b.category?.name || fallback.category.name },
               rating: fallback.rating,
               review_count: fallback.review_count,
               verification_status: b.verification_status || fallback.verification_status,
-              town: b.address || fallback.town,
-              county: fallback.county,
+              town: b.town || b.address || fallback.town,
+              county: countyName,
               phone: b.phone || fallback.phone,
-              website_url: b.website || fallback.website_url,
+              website_url: b.website_url || fallback.website_url,
               photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
             };
           });

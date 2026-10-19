@@ -114,24 +114,52 @@ export default function HomePage() {
       try {
         const { data, error } = await supabase
           .from('businesses')
-          .select('*, category:categories(*)')
+          .select(`
+            id,
+            name,
+            address,
+            town,
+            county,
+            phone,
+            public_email,
+            website_url,
+            verification_status,
+            category:categories(name),
+            healthcare_facility_details(
+              facility_type,
+              emergency_services
+            )
+          `)
           .limit(4);
 
-        if (data && data.length > 0 && !error) {
-          // Map DB facilities to cards with stock photos
-          const mapped = data.map((item: any, index: number) => ({
-            id: item.id,
-            name: item.name,
-            category: item.category || { name: 'Healthcare Facility' },
-            rating: index === 0 ? 4.0 : index === 1 ? 5.0 : index === 2 ? 3.0 : null,
-            review_count: index === 0 ? 116 : index === 1 ? 198 : index === 2 ? 116 : 0,
-            verification_status: item.verification_status || (index < 3 ? 'verified' : 'unverified'),
-            town: item.town || '',
-            county: item.county ? `${item.county} County` : 'Liberia',
-            phone: item.phone || '+231 886 000 000',
-            website_url: item.website_url || 'www.liberiahealth.org',
-            photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
-          }));
+        if (error) {
+          console.warn('Error fetching facilities, using fallbacks:', error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const mapped = data.map((item: any, index: number) => {
+            const fallback = FIGMA_FEATURED_FACILITIES[index % FIGMA_FEATURED_FACILITIES.length];
+            const countyName = item.county
+              ? item.county.toLowerCase().includes('county')
+                ? item.county
+                : `${item.county} County`
+              : fallback.county;
+
+            return {
+              id: item.id,
+              name: item.name || fallback.name,
+              category: { name: item.category?.name || fallback.category.name },
+              rating: fallback.rating,
+              review_count: fallback.review_count,
+              verification_status: item.verification_status || fallback.verification_status,
+              town: item.town || item.address || fallback.town,
+              county: countyName,
+              phone: item.phone || fallback.phone,
+              website_url: item.website_url || fallback.website_url,
+              photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
+            };
+          });
           setFeaturedFacilities(mapped);
         }
       } catch (err) {
@@ -343,6 +371,9 @@ export default function HomePage() {
                       alt={facility.name}
                       className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                     />
+                    <div className="absolute top-3 left-3 bg-[#163B65]/90 text-white text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider backdrop-blur-xs">
+                      {facility.category?.name || 'Healthcare'}
+                    </div>
                   </div>
 
                   {/* Card Content */}

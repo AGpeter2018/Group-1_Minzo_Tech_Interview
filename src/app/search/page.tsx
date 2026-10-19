@@ -134,11 +134,12 @@ function SearchPageContent() {
           .from('businesses')
           .select(`
             *,
-            categories(name),
+            category:categories(name),
             healthcare_facility_details(
+              facility_type,
               emergency_services,
-              ambulance_available,
-              facility_type
+              services_raw,
+              opening_hours_raw
             )
           `)
           .order('name');
@@ -149,17 +150,23 @@ function SearchPageContent() {
         } else if (data && data.length > 0) {
           const mapped = data.map((b: any, index: number) => {
             const fallback = FIGMA_SEARCH_RESULTS[index % FIGMA_SEARCH_RESULTS.length];
+            const countyName = b.county
+              ? b.county.toLowerCase().includes('county')
+                ? b.county
+                : `${b.county} County`
+              : fallback.county;
+
             return {
               id: b.id,
               name: b.name || fallback.name,
-              category_name: b.categories?.name || fallback.category_name,
+              category_name: b.category?.name || fallback.category_name,
               rating: fallback.rating,
               review_count: fallback.review_count,
               verification_status: b.verification_status || fallback.verification_status,
-              town: b.address || fallback.town,
-              county: fallback.county,
+              town: b.town || b.address || fallback.town,
+              county: countyName,
               phone: b.phone || fallback.phone,
-              website_url: b.website || fallback.website_url,
+              website_url: b.website_url || fallback.website_url,
               latitude: b.latitude,
               longitude: b.longitude,
               photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
