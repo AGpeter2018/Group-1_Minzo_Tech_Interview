@@ -20,12 +20,49 @@ import {
   Siren,
   Loader2,
   X,
-  Send,
-  UserCheck,
+  User,
   ExternalLink,
 } from 'lucide-react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { getCountyCoordinates } from '@/lib/location';
+
+interface ReviewDisplay {
+  id: string;
+  name: string;
+  rating: number;
+  timeAgo: string;
+  comment: string;
+  avatar: string | null;
+}
+
+interface FacilityDisplay {
+  id: string;
+  name: string;
+  category: { name: string };
+  town: string;
+  county: string;
+  phone: string;
+  website_url: string;
+  verification_status: string;
+  average_rating: number | null;
+  review_count: number;
+  photo: string;
+  description: string;
+  opening_hours: string;
+}
+
+interface DbReviewRow {
+  id: string;
+  rating?: number | null;
+  comment?: string | null;
+  is_anonymous?: boolean | null;
+  created_at?: string;
+  profiles?:
+    | { full_name?: string | null; avatar_url?: string | null }
+    | { full_name?: string | null; avatar_url?: string | null }[]
+    | null;
+}
 
 // Helper to format relative time for database review timestamps
 function formatRelativeTime(dateString?: string) {
@@ -47,7 +84,7 @@ function formatRelativeTime(dateString?: string) {
 }
 
 // Fallback layout metadata matching Figma node 342:1000 (ratings strictly null until loaded from DB)
-const FIGMA_DEFAULT_FACILITY = {
+const FIGMA_DEFAULT_FACILITY: FacilityDisplay = {
   id: 'bomi-govt-hospital',
   name: 'Liberia Government Hospital (Tubmanburg)',
   category: { name: 'Hospital' },
@@ -69,8 +106,8 @@ export default function BusinessProfilePage() {
   const router = useRouter();
   const facilityId = params?.id as string;
 
-  const [facility, setFacility] = useState<any>(FIGMA_DEFAULT_FACILITY);
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [facility, setFacility] = useState<FacilityDisplay>(FIGMA_DEFAULT_FACILITY);
+  const [reviews, setReviews] = useState<ReviewDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
 
@@ -80,9 +117,33 @@ export default function BusinessProfilePage() {
   const [hoverRating, setHoverRating] = useState(0);
   const [commentInput, setCommentInput] = useState('');
   const [reviewerNameInput, setReviewerNameInput] = useState('');
+  const [isAnonymousInput, setIsAnonymousInput] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data?.user || null;
+      setCurrentUser(user);
+      if (user?.user_metadata?.full_name) {
+        setReviewerNameInput(user.user_metadata.full_name);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      const user = session?.user || null;
+      setCurrentUser(user);
+      if (user?.user_metadata?.full_name) {
+        setReviewerNameInput(user.user_metadata.full_name);
+      }
+    });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!facilityId) return;
@@ -90,7 +151,7 @@ export default function BusinessProfilePage() {
     async function loadFacility() {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('businesses')
           .select(`
             id,
@@ -117,25 +178,38 @@ export default function BusinessProfilePage() {
         // Fetch reviews solely from database
         const { data: dbRevs } = await supabase
           .from('reviews')
-          .select('*')
+          .select(`
+            *,
+            profiles (
+              full_name,
+              avatar_url
+            )
+          `)
           .eq('business_id', facilityId)
           .order('created_at', { ascending: false });
 
-        const mappedDbRevs = (dbRevs || []).map((r: any) => ({
-          id: r.id,
-          name: r.reviewer_name_display || 'Verified Patient',
-          rating: Number(r.rating) || 5,
-          timeAgo: formatRelativeTime(r.created_at),
-          comment: r.comment || '',
-          avatar: null,
-        }));
+        const mappedDbRevs: ReviewDisplay[] = ((dbRevs as DbReviewRow[] | null) || []).map((r) => {
+          const profile = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+          const authorName = r.is_anonymous
+            ? 'Anonymous Patient'
+            : (profile?.full_name || 'Verified Patient');
+
+          return {
+            id: r.id,
+            name: authorName,
+            rating: Number(r.rating) || 5,
+            timeAgo: formatRelativeTime(r.created_at),
+            comment: r.comment || '',
+            avatar: r.is_anonymous ? null : (profile?.avatar_url || null),
+          };
+        });
 
         const revCount = mappedDbRevs.length;
         const avgRating =
           revCount > 0
             ? Number(
                 (
-                  mappedDbRevs.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
+                  mappedDbRevs.reduce((acc: number, r) => acc + (r.rating || 0), 0) /
                   revCount
                 ).toFixed(1)
               )
@@ -154,14 +228,14 @@ export default function BusinessProfilePage() {
               : `${data.county} County`
             : FIGMA_DEFAULT_FACILITY.county;
 
+          const cat = Array.isArray(data.category) ? data.category[0] : data.category;
+          const categoryName = (cat as { name?: string } | null)?.name || FIGMA_DEFAULT_FACILITY.category.name;
+
           setFacility({
             id: data.id,
             name: data.name || FIGMA_DEFAULT_FACILITY.name,
             category: {
-              name:
-                (Array.isArray(data.category)
-                  ? (data.category[0] as any)?.name
-                  : (data.category as any)?.name) || FIGMA_DEFAULT_FACILITY.category.name,
+              name: categoryName,
             },
             town: data.town || data.address || FIGMA_DEFAULT_FACILITY.town,
             county: cleanCounty,
@@ -206,32 +280,66 @@ export default function BusinessProfilePage() {
     setSubmittingReview(true);
     try {
       const { data: authData } = await supabase.auth.getUser();
-      const reviewerName = reviewerNameInput.trim() || authData.user?.user_metadata?.full_name || 'Verified Patient';
+      const user = authData?.user;
+
+      if (!user) {
+        setReviewError('You must be signed in to submit a review. Please sign in or register.');
+        setSubmittingReview(false);
+        return;
+      }
+
+      // If a custom reviewer name was provided and user profile exists, update profile full_name
+      const customName = reviewerNameInput.trim();
+      if (customName && customName !== user.user_metadata?.full_name) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ full_name: customName })
+            .eq('id', user.id);
+        } catch {
+          // non-critical if profile row not present yet
+        }
+      }
+
+      const insertPayload = {
+        business_id: facility.id,
+        user_id: user.id,
+        rating: ratingInput,
+        comment: commentInput.trim(),
+        is_anonymous: isAnonymousInput,
+        status: 'published' as const,
+      };
 
       const { data: newRev, error: revError } = await supabase
         .from('reviews')
-        .insert({
-          business_id: facility.id,
-          user_id: authData.user?.id || null,
-          rating: ratingInput,
-          comment: commentInput.trim(),
-          reviewer_name_display: reviewerName,
-          is_published: true,
-        })
-        .select()
+        .insert(insertPayload)
+        .select(`
+          *,
+          profiles (
+            full_name,
+            avatar_url
+          )
+        `)
         .single();
 
       if (revError) {
-        console.warn('Review save note:', revError.message);
+        console.error('Review submit error:', revError);
+        setReviewError(revError.message || 'Failed to submit review. Please try again.');
+        return;
       }
 
+      const profile = Array.isArray(newRev?.profiles) ? newRev.profiles[0] : newRev?.profiles;
+      const displayName = isAnonymousInput
+        ? 'Anonymous Patient'
+        : (customName || profile?.full_name || user.user_metadata?.full_name || 'Verified Patient');
+
       const createdReview = {
-        id: newRev?.id || `rev-${Date.now()}`,
-        name: reviewerName,
-        rating: ratingInput,
+        id: newRev.id,
+        name: displayName,
+        rating: newRev.rating || ratingInput,
         timeAgo: 'Just now',
-        comment: commentInput.trim(),
-        avatar: null,
+        comment: newRev.comment || commentInput.trim(),
+        avatar: isAnonymousInput ? null : (profile?.avatar_url || null),
       };
 
       setReviews((prev) => {
@@ -240,7 +348,7 @@ export default function BusinessProfilePage() {
         const newAvg = Number(
           (updated.reduce((sum, r) => sum + (r.rating || 0), 0) / newCount).toFixed(1)
         );
-        setFacility((prevFac: any) => ({
+        setFacility((prevFac) => ({
           ...prevFac,
           average_rating: newAvg,
           review_count: newCount,
@@ -250,14 +358,13 @@ export default function BusinessProfilePage() {
 
       setReviewSuccess('Thank you! Your review has been published.');
       setCommentInput('');
-      setReviewerNameInput('');
 
       setTimeout(() => {
         setReviewModalOpen(false);
         setReviewSuccess(null);
       }, 1500);
-    } catch (err: any) {
-      setReviewError(err.message || 'Failed to submit review.');
+    } catch (err: unknown) {
+      setReviewError(err instanceof Error ? err.message : 'Failed to submit review.');
     } finally {
       setSubmittingReview(false);
     }
@@ -727,6 +834,32 @@ export default function BusinessProfilePage() {
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                 <span>{reviewSuccess}</span>
               </div>
+            ) : !currentUser ? (
+              <div className="py-6 text-center space-y-4">
+                <div className="w-12 h-12 rounded-full bg-blue-50 text-[#163B65] mx-auto flex items-center justify-center">
+                  <User className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-base font-bold text-gray-900">Sign in to leave a review</h4>
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                    Only verified community members can publish healthcare reviews to maintain authenticity and trust.
+                  </p>
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  <Link
+                    href={`/auth/login?redirect=/facility/${facility.id}`}
+                    className="px-5 py-2.5 bg-[#163B65] hover:bg-[#0f2845] text-white text-sm font-bold rounded-lg transition"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href={`/auth/register?redirect=/facility/${facility.id}`}
+                    className="px-5 py-2.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-lg transition"
+                  >
+                    Create Account
+                  </Link>
+                </div>
+              </div>
             ) : (
               <form onSubmit={handleReviewSubmit} className="space-y-4">
                 {reviewError && (
@@ -766,17 +899,31 @@ export default function BusinessProfilePage() {
                   </div>
                 </div>
 
+                {/* Post Anonymously Checkbox */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAnonymousInput}
+                    onChange={(e) => setIsAnonymousInput(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-[#163B65] focus:ring-[#163B65]"
+                  />
+                  <span className="text-xs font-medium text-gray-700">
+                    Post anonymously (your name will not be shown to the public)
+                  </span>
+                </label>
+
                 {/* Reviewer Name */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Your Name
+                    Your Name {isAnonymousInput ? '(Hidden)' : ''}
                   </label>
                   <input
                     type="text"
-                    value={reviewerNameInput}
+                    disabled={isAnonymousInput}
+                    value={isAnonymousInput ? 'Anonymous Patient' : reviewerNameInput}
                     onChange={(e) => setReviewerNameInput(e.target.value)}
                     placeholder="e.g. Andrew John"
-                    className="w-full h-11 px-3.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-black focus:outline-none focus:border-[#163B65] focus:bg-white transition"
+                    className="w-full h-11 px-3.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-black focus:outline-none focus:border-[#163B65] focus:bg-white transition disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
