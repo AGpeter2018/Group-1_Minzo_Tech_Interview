@@ -306,7 +306,7 @@ export default function HomePage() {
             {/* Submit Search Button */}
             <button
               type="submit"
-              className="min-h-11 px-8 bg-[#163B65] text-white text-base font-bold border-radius: 10px; hover:bg-[#0f2845] transition-colors flex items-center justify-center shadow-xs cursor-pointer"
+              className="min-h-11 px-8 bg-[#163B65] text-white text-base font-bold rounded-lg hover:bg-[#0f2845] transition-colors flex items-center justify-center shadow-xs cursor-pointer"
             >
               Search
             </button>
@@ -356,7 +356,36 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+              {[1, 2, 3, 4].map((n) => (
+                <div
+                  key={n}
+                  className="bg-white rounded-xl border border-border shadow-xs overflow-hidden flex flex-col justify-between animate-pulse"
+                >
+                  <div className="w-full h-42.25 bg-gray-200" />
+                  <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-3">
+                      <div className="h-5 bg-gray-200 rounded w-3/4" />
+                      <div className="flex items-center justify-between">
+                        <div className="h-4 bg-gray-200 rounded w-28" />
+                        <div className="h-5 bg-gray-200 rounded-full w-20" />
+                      </div>
+                      <div className="mt-3.5 space-y-2 pt-1">
+                        <div className="h-4 bg-gray-100 rounded w-2/3" />
+                        <div className="h-4 bg-gray-100 rounded w-1/2" />
+                        <div className="h-4 bg-gray-100 rounded w-3/5" />
+                      </div>
+                    </div>
+                    <div className="mt-5 pt-3 border-t border-gray-100 flex items-center justify-end">
+                      <div className="h-4 bg-gray-200 rounded w-24" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
             {featuredFacilities.map((facility) => {
               const isVerified = facility.verification_status === 'verified';
               return (
@@ -467,6 +496,7 @@ export default function HomePage() {
               );
             })}
           </div>
+        )}
         </div>
       </section>
 

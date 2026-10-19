@@ -442,17 +442,35 @@ function SearchPageContent() {
               </h1>
             </div>
 
-            {/* Loading State */}
-            {loading && (
-              <div className="py-12 flex flex-col items-center justify-center space-y-3">
-                <Loader2 className="w-8 h-8 animate-spin text-[#163B65]" />
-                <p className="text-xs text-gray-500">Loading verified facilities...</p>
+            {/* Loading Skeleton State or Results List */}
+            {loading ? (
+              <div className="space-y-6">
+                {[1, 2, 3].map((n) => (
+                  <div
+                    key={n}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row animate-pulse"
+                  >
+                    <div className="w-full md:w-79.5 h-52 bg-gray-200 shrink-0" />
+                    <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between space-y-4">
+                      <div className="space-y-3">
+                        <div className="h-6 bg-gray-200 rounded w-2/3" />
+                        <div className="h-4 bg-gray-100 rounded w-1/3" />
+                        <div className="space-y-2 pt-2">
+                          <div className="h-4 bg-gray-100 rounded w-3/4" />
+                          <div className="h-4 bg-gray-100 rounded w-1/2" />
+                          <div className="h-4 bg-gray-100 rounded w-2/3" />
+                        </div>
+                      </div>
+                      <div className="pt-4 border-t border-gray-100 flex justify-end">
+                        <div className="h-5 bg-gray-200 rounded w-28" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-
-            {/* Results List Cards (Figma Node 280:1956, 280:1989, 280:2023) */}
-            <div className="space-y-6">
-              {filteredFacilities.map((facility) => {
+            ) : (
+              <div className="space-y-6">
+                {filteredFacilities.map((facility) => {
                 const isVerified = facility.verification_status === 'verified';
                 return (
                   <div
@@ -587,6 +605,7 @@ function SearchPageContent() {
                 );
               })}
             </div>
+            )}
 
             {/* Empty State */}
             {!loading && filteredFacilities.length === 0 && (
