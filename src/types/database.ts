@@ -75,19 +75,24 @@ export interface Staff {
     license_number?: string | null;
     is_verified?: boolean;
     business_id?: string | null;
+    source_facility_name?: string | null;
+    facility_import_key?: string | null;
     country?: string | null;
     county?: string | null;
     town?: string | null;
     phone?: string | null;
     public_email?: string | null;
     years_of_experience?: number | null;
+    source?: string;
     is_published?: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface Review {
     id: string;
     business_id: string;
-    user_id?: string | null;
+    user_id: string;
     rating: number;
     comment: string | null;
     is_anonymous: boolean;
@@ -96,6 +101,12 @@ export interface Review {
     created_at: string;
     updated_at?: string;
     profile?: Profile;
+}
+
+export interface Follow {
+    user_id: string;
+    business_id: string;
+    created_at: string;
 }
 
 export interface Message {
@@ -113,12 +124,25 @@ export interface Message {
     created_at: string;
 }
 
+export interface BusinessPhoto {
+    id: string;
+    business_id: string;
+    storage_path: string;
+    caption?: string | null;
+    uploaded_by?: string | null;
+    is_primary: boolean;
+    created_at: string;
+}
+
 export interface BusinessDocument {
     id: string;
     business_id: string;
     document_type: string;
     storage_path: string;
-    status: string
+    status: string;
+    reviewed_by?: string | null;
+    reviewed_at?: string | null;
+    review_notes?: string | null;
     created_at: string;
 }
 
@@ -130,4 +154,4 @@ export interface AuditLog {
     entity_id: string | null;
     details: Record<string, unknown>;
     created_at: string;
-}
+}
