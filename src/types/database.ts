@@ -45,7 +45,7 @@ export interface Business {
     updated_at: string;
     // Join extensions
     category?: Category;
-    healthcare_facility_details?: HealthcareFacilityDetails;
+    healthcare_facility_details?: HealthcareFacilityDetails | HealthcareFacilityDetails[];
     distance_km?: number;
     average_rating?: number;
     review_count?: number;
@@ -53,49 +53,62 @@ export interface Business {
 
 export interface HealthcareFacilityDetails {
     business_id: string;
-    facility_type: string | null;
-    services_raw: string | null;
-    opening_hours_raw: string | null;
-    services: string[] | null;
-    opening_hours: Record<string, string> | null;
-    emergency_services: boolean | null;
-    registration_number: string | null;
-    additional_notes: string | null;
+    facility_type?: string | null;
+    facility_level?: string | null;
+    services_raw?: string | null;
+    opening_hours_raw?: string | null;
+    services?: string[] | null;
+    opening_hours?: Record<string, string> | string | null;
+    emergency_services?: boolean | null;
+    ambulance_available?: boolean | null;
+    bed_count?: number | null;
+    registration_number?: string | null;
+    additional_notes?: string | null;
 }
 
 export interface Staff {
     id: string;
     full_name: string;
-    profession: string | null;
-    business_id: string | null;
+    profession?: string | null;
+    specialty?: string | null;
+    cadre?: string | null;
+    license_number?: string | null;
+    is_verified?: boolean;
+    business_id?: string | null;
     country?: string | null;
-    county: string | null;
-    town: string | null;
-    phone: string | null;
-    public_email: string | null;
-    years_of_experience: number | null;
-    is_published: boolean;
+    county?: string | null;
+    town?: string | null;
+    phone?: string | null;
+    public_email?: string | null;
+    years_of_experience?: number | null;
+    is_published?: boolean;
 }
 
 export interface Review {
     id: string;
     business_id: string;
-    user_id: string;
+    user_id?: string | null;
     rating: number;
     comment: string | null;
     is_anonymous: boolean;
-    status: ReviewStatus;
+    reviewer_name_display?: string | null;
+    status?: ReviewStatus;
     created_at: string;
-    updated_at: string;
+    updated_at?: string;
     profile?: Profile;
 }
 
 export interface Message {
     id: string;
-    user_id: string;
+    user_id?: string | null;
+    sender_id?: string | null;
+    sender_name?: string | null;
+    sender_email?: string | null;
+    sender_phone?: string | null;
     business_id: string;
-    subject: string;
-    message: string;
+    subject?: string | null;
+    message?: string | null;
+    body?: string | null;
     is_read: boolean;
     created_at: string;
 }
