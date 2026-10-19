@@ -17,7 +17,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   const ratingValue = business.average_rating ? Number(business.average_rating).toFixed(1) : null;
 
   return (
-    <article className="bg-surface rounded-[10px] border border-border p-4 md:p-5 lg:p-6 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
+    <article className="bg-surface rounded-md border border-border p-4 md:p-5 lg:p-6 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group">
       <div>
         {/* Top Header: Category & Verification Badge */}
         <div className="flex items-start justify-between gap-2 mb-2.5">

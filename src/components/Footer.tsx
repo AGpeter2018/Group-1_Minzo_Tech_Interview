@@ -3,8 +3,8 @@ import Link from 'next/link';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="bg-[#FFFFFF] border-t border-[#E5E7EB] mt-auto">
-      <div className="max-w-[1200px] mx-auto px-4 md:px-6 lg:px-8 py-8 md:py-12">
+    <footer className="bg-surface border-t border-border mt-auto">
+      <div className="max-w-300 mx-auto px-4 md:px-6 lg:px-8 py-8 md:py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Info */}
           <div className="space-y-3 md:col-span-2">
@@ -15,7 +15,7 @@ export const Footer: React.FC = () => {
                 className="w-8 h-8 rounded-lg object-contain shadow-xs"
               />
               <span className="font-extrabold text-lg text-[#163B65] tracking-tight">
-                MINZO <span className="text-[#4AB057]">AFRICA</span>
+                MINZO <span className="text-secondary">AFRICA</span>
               </span>
             </div>
             <p className="text-sm text-[#616161] max-w-sm leading-relaxed">
@@ -85,7 +85,7 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between text-xs text-[#9E9E9E] gap-2">
+        <div className="mt-8 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between text-xs text-[#9E9E9E] gap-2">
           <span>
             © {new Date().getFullYear()} Minzo Africa. All rights reserved.
           </span>
