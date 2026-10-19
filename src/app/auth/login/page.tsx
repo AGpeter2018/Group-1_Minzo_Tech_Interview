@@ -50,16 +50,37 @@ function LoginForm() {
 
       // Check role to route appropriately
       if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .single();
+        let role = 'user';
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          if (profile?.role) {
+            role = profile.role;
+          } else {
+            // Auto-provision profile row if not existing
+            const userMeta = data.user.user_metadata || {};
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              full_name: userMeta.full_name || email.split('@')[0],
+              phone: userMeta.phone || null,
+              role: (userMeta.role as any) || 'user',
+            });
+            if (userMeta.role) {
+              role = userMeta.role;
+            }
+          }
+        } catch (profileErr) {
+          console.warn('Profile lookup fallback:', profileErr);
+        }
 
         setTimeout(() => {
-          if (profile?.role === 'admin') {
+          if (role === 'admin') {
             router.push('/admin');
-          } else if (profile?.role === 'business') {
+          } else if (role === 'business') {
             router.push('/dashboard');
           } else {
             router.push(redirectedFrom);

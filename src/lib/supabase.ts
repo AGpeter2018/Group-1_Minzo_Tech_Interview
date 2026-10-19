@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gvuaviehntebuxhfzrbw.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://spbrsszzhnnbgjismuhr.supabase.co';
 // Automatically sanitize key if prefixed with 'public-'
 const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseKey = rawKey.replace(/^public-/, '');

@@ -66,20 +66,37 @@ export default function RegisterPage() {
         throw error;
       }
 
-      // 2. Insert or update in public.profiles table
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-          role: 'user',
-        });
+      // Check if user already exists
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setErrorMessage('An account with this email address already exists. Please log in.');
+        return;
       }
 
-      setSuccessMessage('Account created successfully! Redirecting...');
-      setTimeout(() => {
-        router.push('/');
-      }, 1500);
+      // 2. Insert or update in public.profiles table if session is active
+      if (data.user) {
+        try {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+            role: 'user',
+          });
+        } catch (profileErr) {
+          console.warn('Profile creation handled by database trigger or delayed until login:', profileErr);
+        }
+      }
+
+      if (data.session) {
+        setSuccessMessage('Account created successfully! Welcome to Minzo Africa.');
+        setTimeout(() => {
+          router.push('/home');
+        }, 1200);
+      } else {
+        setSuccessMessage('Account created! Please check your email inbox to verify your email address, then sign in.');
+        setTimeout(() => {
+          router.push('/auth/login');
+        }, 2800);
+      }
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to create account. Please try again.');
     } finally {

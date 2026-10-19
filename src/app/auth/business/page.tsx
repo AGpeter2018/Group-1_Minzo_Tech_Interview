@@ -190,11 +190,9 @@ export default function BusinessRegisterPage() {
       if (businessData?.id) {
         await supabase.from('healthcare_facility_details').insert({
           business_id: businessData.id,
-          facility_level: facilityLevel,
+          facility_type: facilityLevel,
           emergency_services: emergencyServices,
-          ambulance_available: ambulanceAvailable,
-          bed_count: typeof bedCount === 'number' ? bedCount : null,
-          opening_hours: openingHours,
+          opening_hours_raw: openingHours,
         });
       }
 
