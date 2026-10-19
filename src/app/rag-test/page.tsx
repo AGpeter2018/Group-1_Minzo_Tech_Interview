@@ -4,17 +4,17 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function RagTestPage() {
-  const [query, setQuery] = useState('Are there any clinics in Monrovia?');
+  const [query, setQuery] = useState('Where can I find an emergency hospital in Bomi?');
   const [county, setCounty] = useState('');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   const sampleQueries = [
+    'Where can I find an emergency hospital in Bomi?',
     'Are there any clinics in Monrovia?',
-    'Find hospitals with emergency services',
-    'What facilities are in Bomi County?',
-    'Where is Savanna Field Clinic located and what are their hours?',
+    'Where can I find child health or immunization services?',
+    'Tell me about Savanna Field Clinic and how to contact them',
   ];
 
   async function handleSearch(e?: React.FormEvent, customQuery?: string) {
@@ -49,16 +49,17 @@ export default function RagTestPage() {
   }
 
   return (
-    <div style={{ maxWidth: '900px', margin: '40px auto', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ maxWidth: '960px', margin: '40px auto', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <div style={{ marginBottom: '24px', borderBottom: '1px solid #e2e8f0', paddingBottom: '16px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#1e293b' }}>
-          🤖 Groq + Supabase RAG Agent Tester
+        <h1 style={{ fontSize: '28px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#163B65' }}>
+          🤖 Places Directory AI Concierge
         </h1>
-        <p style={{ color: '#64748b', margin: 0 }}>
-          Interactive playground to test the live RAG agent connected to Supabase and Groq.
+        <p style={{ color: '#64748b', margin: 0, fontSize: '15px' }}>
+          Conversational RAG assistant grounded in Supabase, powered by Groq, providing direct links and contextual follow-up suggestions.
         </p>
       </div>
 
+      {/* Preset Queries */}
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
         {sampleQueries.map((q, idx) => (
           <button
@@ -69,13 +70,14 @@ export default function RagTestPage() {
               handleSearch(undefined, q);
             }}
             style={{
-              background: '#f1f5f9',
+              background: '#f8fafc',
               border: '1px solid #cbd5e1',
               borderRadius: '9999px',
               padding: '6px 14px',
               fontSize: '13px',
               cursor: 'pointer',
-              color: '#334155',
+              color: '#1e293b',
+              transition: 'all 0.2s',
             }}
           >
             {q}
@@ -83,16 +85,17 @@ export default function RagTestPage() {
         ))}
       </div>
 
-      <form onSubmit={(e) => handleSearch(e)} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+      {/* Query Form */}
+      <form onSubmit={(e) => handleSearch(e)} style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
         <div>
-          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', fontSize: '14px', color: '#334155' }}>
-            User Search Query:
+          <label style={{ display: 'block', fontWeight: 600, marginBottom: '6px', fontSize: '14px', color: '#163B65' }}>
+            Ask anything about places, clinics, hospitals, or services:
           </label>
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask about places, clinics, hospitals, locations..."
+            placeholder="e.g. Find clinics with maternal care or 24/7 hospitals in Bomi..."
             style={{
               width: '100%',
               padding: '12px 16px',
@@ -110,7 +113,7 @@ export default function RagTestPage() {
             type="text"
             value={county}
             onChange={(e) => setCounty(e.target.value)}
-            placeholder="Optional County Filter (e.g. Montserrado, Bomi)"
+            placeholder="Optional County Filter (e.g. Bomi, Montserrado)"
             style={{
               flex: 1,
               padding: '10px 14px',
@@ -125,7 +128,7 @@ export default function RagTestPage() {
             type="submit"
             disabled={loading}
             style={{
-              backgroundColor: loading ? '#94a3b8' : '#2563eb',
+              backgroundColor: loading ? '#94a3b8' : '#163B65',
               color: '#ffffff',
               padding: '10px 24px',
               fontSize: '15px',
@@ -135,7 +138,7 @@ export default function RagTestPage() {
               cursor: loading ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Thinking...' : 'Ask Agent'}
+            {loading ? 'Searching & Thinking...' : 'Ask Assistant'}
           </button>
         </div>
       </form>
@@ -147,42 +150,89 @@ export default function RagTestPage() {
       )}
 
       {response && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 12px 0', color: '#0f172a' }}>
-              💬 AI Agent Response
-            </h2>
-            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', color: '#334155' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Conversational Text Response */}
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '20px' }}>💬</span>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#163B65' }}>
+                Assistant Response
+              </h2>
+            </div>
+
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7', color: '#334155', fontSize: '15px' }}>
               {response.answer}
             </div>
+
+            {/* Clickable Suggestions Chips */}
+            {response.suggestions && response.suggestions.length > 0 && (
+              <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px dashed #cbd5e1' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>
+                  💡 Suggested Follow-ups (click to ask):
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {response.suggestions.map((sug: string, i: number) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setQuery(sug);
+                        handleSearch(undefined, sug);
+                      }}
+                      style={{
+                        background: '#eff6ff',
+                        color: '#1d4ed8',
+                        border: '1px solid #bfdbfe',
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {sug} ↗
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, margin: '0 0 12px 0', color: '#334155' }}>
-              📑 Database Grounding Sources ({response.sourceCount} places retrieved)
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
-              {response.places.map((place: any, index: number) => (
-                <div key={place.id || index} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', background: '#fafafa' }}>
-                  <strong style={{ display: 'block', fontSize: '15px', color: '#0f172a' }}>{place.name}</strong>
-                  <span style={{ display: 'inline-block', background: '#e0e7ff', color: '#3730a3', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', margin: '4px 0' }}>
-                    {place.category || 'Facility'}
-                  </span>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>
-                    📍 {place.town ? `${place.town}, ` : ''}{place.county || 'Liberia'}
-                  </div>
-                  {place.phones && place.phones.length > 0 && (
-                    <div style={{ fontSize: '13px', color: '#059669', marginTop: '4px' }}>
-                      📞 {place.phones.join(', ')}
-                    </div>
-                  )}
-                </div>
-              ))}
+          {/* Direct Action Links Bar */}
+          {response.links && response.links.length > 0 && (
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px 0', color: '#163B65' }}>
+                🔗 Direct Links & Actions
+              </h3>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {response.links.slice(0, 10).map((link: any, idx: number) => (
+                  <a
+                    key={idx}
+                    href={link.url}
+                    target={link.type === 'profile' ? '_self' : '_blank'}
+                    rel="noreferrer"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      background: link.type === 'profile' ? '#163B65' : link.type === 'map' ? '#047857' : link.type === 'phone' ? '#0284c7' : '#475569',
+                      color: '#ffffff',
+                    }}
+                  >
+                    <span>{link.type === 'profile' ? '📋' : link.type === 'map' ? '🗺️' : link.type === 'phone' ? '📞' : '🌐'}</span>
+                    <span>{link.title}</span>
+                  </a>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
