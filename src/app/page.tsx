@@ -230,16 +230,17 @@ export default function HomePage() {
       {/* =========================================================================
           HERO SECTION with background image and integrated search bar
       ========================================================================= */}
-      <section className="relative w-full max-w-300 mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-12">
-        <div className="relative border-radius: 20px overflow-hidden bg-linear-to-r from-[#0d223a] via-[#163b65] to-[#1a4a7f] shadow-lg min-h-85 md:min-h-95 flex flex-col justify-center px-6 sm:px-12 py-10 md:py-14 text-white">
-          {/* Background image overlay */}
-          <div
-            className="absolute inset-0 bg-cover bg-center pointer-events-none"
-            style={{
-              backgroundImage:
-                'url("/hero-image.png")', 
-            }}
-          />
+      <section className="relative z-30 w-full max-w-300 mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-12">
+        <div className="relative rounded-[20px] shadow-lg min-h-85 md:min-h-95 flex flex-col justify-center px-6 sm:px-12 py-10 md:py-14 text-white">
+          {/* Background image overlay and gradient clipped in rounded container */}
+          <div className="absolute inset-0 rounded-[20px] overflow-hidden pointer-events-none bg-linear-to-r from-[#0d223a] via-[#163b65] to-[#1a4a7f]">
+            <div
+              className="w-full h-full bg-cover bg-center"
+              style={{
+                backgroundImage: 'url("/hero-image.png")',
+              }}
+            />
+          </div>
 
           <div className="relative z-10 max-w-2xl">
             <h1 className="text-2xl sm:text-3xl md:text-[34px] font-bold text-white tracking-tight leading-tight">
