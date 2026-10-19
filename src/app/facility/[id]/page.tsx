@@ -251,7 +251,7 @@ export default function BusinessProfilePage() {
 
   return (
     <div className="min-h-screen bg-white text-black py-8 px-4 sm:px-6">
-      <div className="max-w-[864px] mx-auto w-full space-y-9">
+      <div className="max-w-216 mx-auto w-full space-y-9">
         {/* =========================================================================
             1. BACK TO SEARCH BUTTON (Figma Node 342:1002 - Frame 64)
         ========================================================================= */}
@@ -273,7 +273,7 @@ export default function BusinessProfilePage() {
           {/* Upper Row: Image + Details + Call Button (Figma Node 342:1007 - Frame 32) */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
             {/* Image (Figma Node 342:1008) */}
-            <div className="w-full sm:w-[180px] h-[166px] rounded-xl overflow-hidden shrink-0 bg-gray-100">
+            <div className="w-full sm:w-45 h-41.5 rounded-xl overflow-hidden shrink-0 bg-gray-100">
               <img
                 src={facility.photo}
                 alt={facility.name}
@@ -347,7 +347,7 @@ export default function BusinessProfilePage() {
             <div className="w-full sm:w-auto shrink-0 flex sm:self-center">
               <a
                 href={`tel:${facility.phone}`}
-                className="w-full sm:w-[150px] h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                className="w-full sm:w-37.5 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
                 <Phone className="w-4 h-4" />
                 <span>Call</span>
@@ -376,7 +376,7 @@ export default function BusinessProfilePage() {
 
           <div className="bg-[#DBEAFE] rounded-xl px-4 sm:px-8 py-5 flex items-center justify-between gap-2 overflow-x-auto">
             {/* 1. General Medicine */}
-            <div className="flex flex-col items-center min-w-[100px] text-center group">
+            <div className="flex flex-col items-center min-w-25 text-center group">
               <div className="w-11 h-11 rounded-full bg-[#BFDBFE] group-hover:bg-[#163B65] group-hover:text-white flex items-center justify-center text-[#163B65] mb-2 transition shadow-2xs">
                 <Stethoscope className="w-5 h-5" />
               </div>
@@ -386,7 +386,7 @@ export default function BusinessProfilePage() {
             </div>
 
             {/* 2. Pharmacy */}
-            <div className="flex flex-col items-center min-w-[100px] text-center group">
+            <div className="flex flex-col items-center min-w-25 text-center group">
               <div className="w-11 h-11 rounded-full bg-[#BFDBFE] group-hover:bg-[#163B65] group-hover:text-white flex items-center justify-center text-[#163B65] mb-2 transition shadow-2xs">
                 <Pill className="w-5 h-5" />
               </div>
@@ -396,7 +396,7 @@ export default function BusinessProfilePage() {
             </div>
 
             {/* 3. Laboratory */}
-            <div className="flex flex-col items-center min-w-[100px] text-center group">
+            <div className="flex flex-col items-center min-w-25 text-center group">
               <div className="w-11 h-11 rounded-full bg-[#BFDBFE] group-hover:bg-[#163B65] group-hover:text-white flex items-center justify-center text-[#163B65] mb-2 transition shadow-2xs">
                 <FlaskConical className="w-5 h-5" />
               </div>
@@ -406,7 +406,7 @@ export default function BusinessProfilePage() {
             </div>
 
             {/* 4. Maternity Care */}
-            <div className="flex flex-col items-center min-w-[100px] text-center group">
+            <div className="flex flex-col items-center min-w-25 text-center group">
               <div className="w-11 h-11 rounded-full bg-[#BFDBFE] group-hover:bg-[#163B65] group-hover:text-white flex items-center justify-center text-[#163B65] mb-2 transition shadow-2xs">
                 <Baby className="w-5 h-5" />
               </div>
@@ -416,7 +416,7 @@ export default function BusinessProfilePage() {
             </div>
 
             {/* 5. Emergency */}
-            <div className="flex flex-col items-center min-w-[100px] text-center group">
+            <div className="flex flex-col items-center min-w-25 text-center group">
               <div className="w-11 h-11 rounded-full bg-[#BFDBFE] group-hover:bg-[#163B65] group-hover:text-white flex items-center justify-center text-[#163B65] mb-2 transition shadow-2xs">
                 <Siren className="w-5 h-5" />
               </div>
@@ -492,7 +492,7 @@ export default function BusinessProfilePage() {
               <div className="pt-2 flex items-center gap-4 flex-wrap">
                 <a
                   href={`tel:${facility.phone}`}
-                  className="w-[150px] h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  className="w-37.5 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                 >
                   <Phone className="w-4 h-4" />
                   <span>Call</span>
@@ -501,7 +501,7 @@ export default function BusinessProfilePage() {
                 <button
                   type="button"
                   onClick={() => setIsFollowing(!isFollowing)}
-                  className={`w-[150px] h-11 text-base font-bold rounded-lg border-[1.5px] border-[#163B65] transition-colors flex items-center justify-center cursor-pointer ${
+                  className={`w-37.5 h-11 text-base font-bold rounded-lg border-[1.5px] border-[#163B65] transition-colors flex items-center justify-center cursor-pointer ${
                     isFollowing
                       ? 'bg-[#163B65] text-white'
                       : 'bg-white text-[#163B65] hover:bg-blue-50'
@@ -513,7 +513,7 @@ export default function BusinessProfilePage() {
             </div>
 
             {/* Right Column: Map Preview (Figma Node 342:1117 - Frame 69) */}
-            <div className="w-full h-[329px] rounded-xl overflow-hidden border border-black/10 relative bg-gray-100 shadow-2xs">
+            <div className="w-full h-82.25 rounded-xl overflow-hidden border border-black/10 relative bg-gray-100 shadow-2xs">
               <iframe
                 title="Facility Map Location"
                 width="100%"
@@ -561,7 +561,7 @@ export default function BusinessProfilePage() {
           {/* Reviews Content Grid (Figma Node 342:1127 - Frame 101) */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
             {/* Left Rating Card (Figma Node 342:1128 - Frame 82) */}
-            <div className="md:col-span-4 w-full sm:w-[212px] h-[143px] rounded-xl border border-black/15 bg-white p-4 flex flex-col items-center justify-center space-y-1.5 shadow-2xs">
+            <div className="md:col-span-4 w-full sm:w-53 h-35.75 rounded-xl border border-black/15 bg-white p-4 flex flex-col items-center justify-center space-y-1.5 shadow-2xs">
               <span className="text-3xl font-medium text-black">
                 {facility.average_rating ? Number(facility.average_rating).toFixed(1) : '4.0'}
               </span>
