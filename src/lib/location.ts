@@ -18,24 +18,55 @@ export const LIBERIAN_COUNTIES: Record<string, { lat: number; lng: number }> = {
 };
 
 export const COUNTIES_LIST = Object.keys(LIBERIAN_COUNTIES).sort();
+export const LIBERIA_COUNTIES = COUNTIES_LIST;
+
+export interface Coordinates {
+  lat?: number;
+  lng?: number;
+  latitude?: number;
+  longitude?: number;
+}
+
+export function getCountyCoordinates(county: string): { latitude: number; longitude: number } {
+  const c = LIBERIAN_COUNTIES[county] || LIBERIAN_COUNTIES['Montserrado'];
+  return { latitude: c.lat, longitude: c.lng };
+}
 
 /**
- * Calculates straight-line distance in kilometers between two coordinates using the Haversine formula
+ * Calculates straight-line distance in kilometers between two coordinates using the Haversine formula.
+ * Supports both object coordinates or 4 numeric arguments.
  */
 export function calculateHaversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
+  coordOrLat1: Coordinates | { latitude: number; longitude: number } | number,
+  coordOrLon1?: Coordinates | { latitude: number; longitude: number } | number,
+  lat2?: number,
+  lon2?: number
 ): number {
+  let p1Lat: number;
+  let p1Lng: number;
+  let p2Lat: number;
+  let p2Lng: number;
+
+  if (typeof coordOrLat1 === 'object' && coordOrLat1 !== null && typeof coordOrLon1 === 'object' && coordOrLon1 !== null) {
+    p1Lat = (coordOrLat1 as any).lat ?? (coordOrLat1 as any).latitude ?? 0;
+    p1Lng = (coordOrLat1 as any).lng ?? (coordOrLat1 as any).longitude ?? 0;
+    p2Lat = (coordOrLon1 as any).lat ?? (coordOrLon1 as any).latitude ?? 0;
+    p2Lng = (coordOrLon1 as any).lng ?? (coordOrLon1 as any).longitude ?? 0;
+  } else {
+    p1Lat = Number(coordOrLat1);
+    p1Lng = Number(coordOrLon1);
+    p2Lat = Number(lat2 ?? 0);
+    p2Lng = Number(lon2 ?? 0);
+  }
+
   const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const dLat = (p2Lat - p1Lat) * (Math.PI / 180);
+  const dLon = (p2Lng - p1Lng) * (Math.PI / 180);
 
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
+    Math.cos(p1Lat * (Math.PI / 180)) *
+      Math.cos(p2Lat * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
 
@@ -46,18 +77,33 @@ export function calculateHaversineDistance(
 /**
  * Fallback coordinate resolver: returns exact coordinates if available,
  * or the centroid coordinates of the county capital.
+ * Supports passing a business object or (latitude, longitude, county).
  */
 export function resolveCoordinates(
-  latitude: number | null | undefined,
-  longitude: number | null | undefined,
-  county: string | null | undefined
+  businessOrLat: { latitude?: number | null; longitude?: number | null; county?: string | null } | number | null | undefined,
+  longitude?: number | null | undefined,
+  county?: string | null | undefined
 ): { lat: number; lng: number } {
-  if (latitude != null && longitude != null && !isNaN(latitude) && !isNaN(longitude)) {
-    return { lat: latitude, lng: longitude };
+  let lat: number | null | undefined;
+  let lng: number | null | undefined;
+  let cty: string | null | undefined;
+
+  if (typeof businessOrLat === 'object' && businessOrLat !== null) {
+    lat = businessOrLat.latitude;
+    lng = businessOrLat.longitude;
+    cty = businessOrLat.county;
+  } else {
+    lat = businessOrLat;
+    lng = longitude;
+    cty = county;
   }
 
-  if (county && LIBERIAN_COUNTIES[county]) {
-    return LIBERIAN_COUNTIES[county];
+  if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+    return { lat, lng };
+  }
+
+  if (cty && LIBERIAN_COUNTIES[cty]) {
+    return LIBERIAN_COUNTIES[cty];
   }
 
   // Default to central Monrovia (Montserrado)

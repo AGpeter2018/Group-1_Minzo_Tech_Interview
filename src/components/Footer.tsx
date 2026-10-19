@@ -9,9 +9,11 @@ export const Footer: React.FC = () => {
           {/* Brand Info */}
           <div className="space-y-3 md:col-span-2">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#163B65] flex items-center justify-center text-white font-black text-base">
-                M
-              </div>
+              <img
+                src="/favicon.ico"
+                alt="Minzo Africa"
+                className="w-8 h-8 rounded-lg object-contain shadow-xs"
+              />
               <span className="font-extrabold text-lg text-[#163B65] tracking-tight">
                 MINZO <span className="text-[#4AB057]">AFRICA</span>
               </span>
