@@ -4,13 +4,19 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { AiChatbot } from '@/components/AiChatbot';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAuthRoute = pathname ? pathname.startsWith('/auth') : false;
 
   if (isAuthRoute) {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        <AiChatbot />
+      </>
+    );
   }
 
   return (
@@ -18,6 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />
+      <AiChatbot />
     </div>
   );
 }
