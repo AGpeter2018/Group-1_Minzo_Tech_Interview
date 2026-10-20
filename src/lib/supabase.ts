@@ -3,11 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://spbrsszzhnnbgjismuhr.supabase.co';
 // Automatically sanitize key if prefixed with 'public-'
 const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseKey = rawKey.replace(/^public-/, '');
+const supabaseKey = rawKey.replace(/^public-/, '') || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseKey) {
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
   if (typeof window !== 'undefined') {
-    console.warn("Missing Supabase URL or anon key. Check your .env / .env.local file.");
+    console.warn("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY. Check your .env / .env.local file.");
   }
 }
 

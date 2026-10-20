@@ -7,7 +7,7 @@ import { Footer } from '@/components/Footer';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthRoute = pathname ? pathname.startsWith('/auth') : false;
+  const isAuthRoute = pathname ? pathname.startsWith('/auth') || pathname.startsWith('/signUp') : false;
 
   if (isAuthRoute) {
     return <>{children}</>;
