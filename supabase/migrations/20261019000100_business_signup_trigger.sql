@@ -1,3 +1,11 @@
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'app_role') then
+    create type public.app_role as enum ('user', 'business_owner', 'admin');
+  end if;
+end;
+$$;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
