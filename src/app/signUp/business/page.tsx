@@ -139,14 +139,6 @@ const BusinessSignUp = () => {
         );
       }
 
-      setCategories([])
-      setBusinessName('')
-      setOwnerName('')
-      setPhone('')
-      setEmail('')
-      setPassword('')
-      setConfirmPassword('')
-
       const userId = data.user?.id;
       if (userId) {
         try {
@@ -191,6 +183,15 @@ const BusinessSignUp = () => {
           ? "Your business account has been created. Its listing is pending verification."
           : "Registration received! Please check your email to confirm your account. Your business listing is pending verification.",
       );
+
+      // Reset form fields upon success
+      setCategoryId("");
+      setBusinessName("");
+      setOwnerName("");
+      setPhone("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
     } catch (error) {
       setErrorMessage(
         error instanceof Error
