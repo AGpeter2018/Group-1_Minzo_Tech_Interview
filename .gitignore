@@ -64,3 +64,6 @@ coverage/
 .env.test.local
 project
 data
+
+# Added by ggshield
+.cache_ggshield

@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X, Bell, User, LogOut, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 export const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userRole, setUserRole] = useState<string>('user');
   const pathname = usePathname();
   const router = useRouter();
@@ -67,6 +68,7 @@ export const Header: React.FC = () => {
     { label: 'Health Facilities', href: '/search' },
     { label: 'Add Business', href: '/auth/business' },
     { label: 'Write a Review', href: '/search?action=review' },
+    ...(userRole === 'admin' ? [{ label: 'Admin', href: '/admin' }] : []),
   ];
 
   return (
@@ -160,9 +162,9 @@ export const Header: React.FC = () => {
 
               {/* Profile Avatar Button */}
               <Link
-                href={userRole === 'admin' ? '/admin' : '/dashboard'}
+                href="/profile"
                 className="w-11 h-11 rounded-full bg-[#D9D9D9]/25 hover:bg-[#D9D9D9]/40 flex items-center justify-center transition-colors cursor-pointer text-text"
-                title={user.email ? `Logged in as ${user.email}` : 'My Account'}
+                title={user.email ? `Profile: ${user.email}` : 'My Profile'}
               >
                 <User className="w-5 h-5" />
               </Link>
@@ -233,12 +235,12 @@ export const Header: React.FC = () => {
             {user ? (
               <div className="space-y-2">
                 <Link
-                  href={userRole === 'admin' ? '/admin' : '/dashboard'}
+                  href="/profile"
                   onClick={() => setMobileMenuOpen(false)}
                   className="flex items-center gap-2 h-11 px-4 rounded-xl bg-gray-50 border border-gray-200 text-sm font-semibold text-[#163B65]"
                 >
                   <User className="w-4 h-4" />
-                  <span>My Account ({user.email})</span>
+                  <span>My Profile ({user.email})</span>
                 </Link>
                 <button
                   type="button"
