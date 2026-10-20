@@ -96,7 +96,7 @@ export default function HomePage() {
   const [selectedLocation, setSelectedLocation] = useState('Current Location');
   const [isLocating, setIsLocating] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [featuredFacilities, setFeaturedFacilities] = useState<any[]>(FIGMA_FEATURED_FACILITIES);
+  const [featuredFacilities, setFeaturedFacilities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // If user is already authenticated, route them to authenticated landing page
@@ -131,21 +131,20 @@ export default function HomePage() {
             ),
             reviews(rating)
           `)
-          .limit(4);
+          .limit(8);
 
         if (error) {
-          console.warn('Error fetching facilities, using fallbacks:', error.message);
+          console.warn('Error fetching facilities:', error.message);
           return;
         }
 
         if (data && data.length > 0) {
           const mapped = data.map((item: any, index: number) => {
-            const fallback = FIGMA_FEATURED_FACILITIES[index % FIGMA_FEATURED_FACILITIES.length];
             const countyName = item.county
               ? item.county.toLowerCase().includes('county')
                 ? item.county
                 : `${item.county} County`
-              : fallback.county;
+              : '';
 
             const revs = item.reviews || [];
             const reviewCount = revs.length;
@@ -161,15 +160,15 @@ export default function HomePage() {
 
             return {
               id: item.id,
-              name: item.name || fallback.name,
-              category: { name: item.category?.name || fallback.category.name },
+              name: item.name,
+              category: { name: item.category?.name || '' },
               rating: avgRating,
               review_count: reviewCount,
-              verification_status: item.verification_status || fallback.verification_status,
-              town: item.town || item.address || fallback.town,
+              verification_status: item.verification_status || 'unverified',
+              town: item.town || item.address || '',
               county: countyName,
-              phone: item.phone || fallback.phone,
-              website_url: item.website_url || fallback.website_url,
+              phone: item.phone || '',
+              website_url: item.website_url || '',
               photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
             };
           });

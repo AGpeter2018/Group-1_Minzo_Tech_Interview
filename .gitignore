@@ -63,3 +63,6 @@ coverage/
 # Test environment secrets should not be committed
 .env.test.local
 project
+
+# Added by ggshield
+.cache_ggshield

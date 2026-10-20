@@ -146,16 +146,15 @@ function SearchPageContent() {
           .order('name');
 
         if (error) {
-          console.warn('Supabase query error, fallback to Figma records:', error.message);
-          setBusinesses(FIGMA_SEARCH_RESULTS);
+          console.warn('Supabase query error:', error.message);
+          setBusinesses([]);
         } else if (data && data.length > 0) {
           const mapped = data.map((b: any, index: number) => {
-            const fallback = FIGMA_SEARCH_RESULTS[index % FIGMA_SEARCH_RESULTS.length];
             const countyName = b.county
               ? b.county.toLowerCase().includes('county')
                 ? b.county
                 : `${b.county} County`
-              : fallback.county;
+              : '';
 
             const revs = b.reviews || [];
             const reviewCount = revs.length;
@@ -171,15 +170,15 @@ function SearchPageContent() {
 
             return {
               id: b.id,
-              name: b.name || fallback.name,
-              category_name: b.category?.name || fallback.category_name,
+              name: b.name,
+              category_name: b.category?.name || '',
               rating: avgRating,
               review_count: reviewCount,
-              verification_status: b.verification_status || fallback.verification_status,
-              town: b.town || b.address || fallback.town,
+              verification_status: b.verification_status || 'unverified',
+              town: b.town || b.address || '',
               county: countyName,
-              phone: b.phone || fallback.phone,
-              website_url: b.website_url || fallback.website_url,
+              phone: b.phone || '',
+              website_url: b.website_url || '',
               latitude: b.latitude,
               longitude: b.longitude,
               photo: FACILITY_PHOTOS[index % FACILITY_PHOTOS.length],
@@ -187,11 +186,11 @@ function SearchPageContent() {
           });
           setBusinesses(mapped);
         } else {
-          setBusinesses(FIGMA_SEARCH_RESULTS);
+          setBusinesses([]);
         }
       } catch (err) {
         console.error('Failed to load businesses:', err);
-        setBusinesses(FIGMA_SEARCH_RESULTS);
+        setBusinesses([]);
       } finally {
         setLoading(false);
       }
