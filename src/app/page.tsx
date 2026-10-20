@@ -230,9 +230,9 @@ export default function HomePage() {
           HERO SECTION with background image and integrated search bar
       ========================================================================= */}
       <section className="relative z-30 w-full max-w-300 mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-12">
-        <div className="relative rounded-[20px] shadow-lg min-h-85 md:min-h-95 flex flex-col justify-center px-6 sm:px-12 py-10 md:py-14 text-white">
+        <div className="relative rounded-xl shadow-lg min-h-85 md:min-h-95 flex flex-col justify-center px-6 sm:px-12 py-10 md:py-14 text-white">
           {/* Background image overlay and gradient clipped in rounded container */}
-          <div className="absolute inset-0 rounded-[20px] overflow-hidden pointer-events-none bg-linear-to-r from-[#0d223a] via-[#163b65] to-[#1a4a7f]">
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none bg-linear-to-r from-[#0d223a] via-[#163b65] to-[#1a4a7f]">
             <div
               className="w-full h-full bg-cover bg-center"
               style={{

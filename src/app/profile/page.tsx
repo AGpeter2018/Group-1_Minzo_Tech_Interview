@@ -354,9 +354,9 @@ export default function UserProfilePage() {
         ========================================================================= */}
         <div className="flex items-center justify-center gap-8 sm:gap-16 flex-wrap">
           {/* Card 1: Reviews (Frame 92) */}
-          <div className="w-[173px] h-[80px] rounded-[14px] border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
+          <div className="w-43.25 h-20 rounded-lg border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
             {/* Eye Icon Circle (Frame 62) */}
-            <div className="w-10 h-10 rounded-full bg-[#4AB057]/10 flex items-center justify-center text-[#4AB057] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary shrink-0">
               <Eye className="w-5 h-5 stroke-[2.2]" />
             </div>
 
@@ -372,9 +372,9 @@ export default function UserProfilePage() {
           </div>
 
           {/* Card 2: Following (Frame 93) */}
-          <div className="w-[173px] h-[80px] rounded-[14px] border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
+          <div className="w-43.25 h-20 rounded-lg border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
             {/* Heart Icon Circle (Frame 62) */}
-            <div className="w-10 h-10 rounded-full bg-[#4AB057]/10 flex items-center justify-center text-[#4AB057] shrink-0">
+            <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary shrink-0">
               <Heart className="w-5 h-5 stroke-[2.2]" />
             </div>
 
@@ -393,7 +393,7 @@ export default function UserProfilePage() {
         {/* =========================================================================
             3. USER PROFILE HERO CARD (Figma Node 343:1723 - Frame 97)
         ========================================================================= */}
-        <section className="bg-[#163B65]/5 rounded-[14px] p-6 sm:p-8 relative">
+        <section className="bg-[#163B65]/5 rounded-lg p-6 sm:p-8 relative">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 sm:gap-8">
             {/* User Portrait Avatar (Figma Node 343:1724 - Frame 92) */}
             <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full overflow-hidden shrink-0 shadow-sm ring-4 ring-white bg-gray-100 flex items-center justify-center">
@@ -481,7 +481,7 @@ export default function UserProfilePage() {
                     className="bg-white rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.15)] border border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between overflow-hidden transition hover:shadow-md"
                   >
                     {/* Facility Image (Figma Frame 28 - Node 343:1758) */}
-                    <div className="w-full sm:w-[343px] h-[188px] shrink-0 bg-gray-100 overflow-hidden">
+                    <div className="w-full sm:w-85.75 h-47 shrink-0 bg-gray-100 overflow-hidden">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={facility.photo}
