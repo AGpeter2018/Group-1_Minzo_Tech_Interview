@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { supabase } from "@/lib/supabase";
 
 type HomeDetail = {
   icon: string;
   text: string;
+};
+
+type BusinessCategory = {
+  id: string;
+  name: string;
 };
 
 const homeDetails: HomeDetail[] = [
@@ -24,15 +30,149 @@ const homeDetails: HomeDetail[] = [
   },
 ];
 
-const categories = ["Hospital", "Pharmacy", "Clinic"];
+const BusinessSignUp = () => {
+  const [categories, setCategories] = useState<BusinessCategory[]>([]);
+  const [categoryId, setCategoryId] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-const BusinesssSignUp = () => {
-  const [category, setCategory] = useState<string>("");
-  const [BusinessName, setBusinessName] = useState<string>("");
-  const [name, setName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [confirmPassword, setConfirmPassword] = useState<string>("");
+  useEffect(() => {
+    let isActive = true;
+
+    const loadCategories = async () => {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("id, name")
+        .order("name");
+
+      if (!isActive) return;
+
+      if (error) {
+        setErrorMessage(
+          "Could not load business categories. Please refresh and try again.",
+        );
+      } else {
+        setCategories(data ?? []);
+      }
+
+      setIsLoadingCategories(false);
+    };
+
+    void loadCategories();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    if (!categoryId) {
+      setErrorMessage("Please select a business category.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/signUp/businessSignUp`,
+          data: {
+            role: "business_owner",
+            account_type: "business_owner",
+            full_name: ownerName.trim(),
+            phone: phone.trim(),
+            business_name: businessName.trim(),
+            category_id: categoryId,
+            business_phone: phone.trim(),
+          },
+        },
+      });
+
+      if (error) throw error;
+      if (data.user?.identities?.length === 0) {
+        throw new Error(
+          "An account with this email already exists. Please log in.",
+        );
+      }
+
+      const userId = data.user?.id;
+      if (userId) {
+        try {
+          // Upsert profile record
+          await supabase.from("profiles").upsert({
+            id: userId,
+            full_name: ownerName.trim(),
+            phone: phone.trim(),
+            role: "business_owner",
+          });
+
+          // Generate unique slug
+          const slug =
+            businessName
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-")
+              .replace(/(^-|-$)+/g, "") +
+            "-" +
+            Math.random().toString(36).substring(2, 6);
+
+          // Insert business record
+          await supabase.from("businesses").insert({
+            name: businessName.trim(),
+            slug,
+            category_id: categoryId,
+            owner_id: userId,
+            phone: phone.trim(),
+            public_email: email.trim(),
+            source: "business_registration",
+            verification_status: "pending",
+            record_status: "pending",
+            is_published: false,
+          });
+        } catch (dbErr) {
+          console.warn("Profile/business creation deferred or handled by trigger:", dbErr);
+        }
+      }
+
+      setSuccessMessage(
+        data.session
+          ? "Your business account has been created. Its listing is pending verification."
+          : "Registration received! Please check your email to confirm your account. Your business listing is pending verification.",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not create your account. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white text-[#17324D]">
@@ -51,7 +191,7 @@ const BusinesssSignUp = () => {
           <p className="flex items-center gap-2 text-sm text-[#526579]">
             Already have an account?
             <Link
-              href="/"
+              href="/auth/login"
               className="font-semibold text-[#163B65] hover:underline"
             >
               Login
@@ -97,7 +237,24 @@ const BusinesssSignUp = () => {
             Set up your business profile in a few steps.
           </p>
 
-          <form className="mt-7 space-y-4">
+          {errorMessage && (
+            <p
+              role="alert"
+              className="mt-6 rounded-sm bg-red-50 p-3 text-sm text-red-700"
+            >
+              {errorMessage}
+            </p>
+          )}
+          {successMessage && (
+            <p
+              role="status"
+              className="mt-6 rounded-sm bg-green-50 p-3 text-sm text-green-800"
+            >
+              {successMessage}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             <div>
               <label
                 htmlFor="business-name"
@@ -109,6 +266,9 @@ const BusinesssSignUp = () => {
                 id="business-name"
                 name="businessName"
                 type="text"
+                required
+                value={businessName}
+                onChange={(event) => setBusinessName(event.target.value)}
                 placeholder="e.g. Golden Healthcare"
                 className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#D5DDE5]"
               />
@@ -124,16 +284,20 @@ const BusinesssSignUp = () => {
               <select
                 id="business-type"
                 name="businessType"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
+                required
+                disabled={isLoadingCategories || categories.length === 0}
+                value={categoryId}
+                onChange={(event) => setCategoryId(event.target.value)}
                 className="h-11 w-full rounded-sm border border-[#D5DDE5] bg-white px-3 text-sm text-[#526579] outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
               >
                 <option value="" disabled>
-                  Select a category
+                  {isLoadingCategories
+                    ? "Loading categories..."
+                    : "Select a category"}
                 </option>
                 {categories.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                  <option key={item.id} value={item.id}>
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -150,6 +314,9 @@ const BusinesssSignUp = () => {
                 id="owners-name"
                 name="ownersName"
                 type="text"
+                required
+                value={ownerName}
+                onChange={(event) => setOwnerName(event.target.value)}
                 placeholder="e.g. John Doe"
                 className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
               />
@@ -166,6 +333,9 @@ const BusinesssSignUp = () => {
                 id="phone-number"
                 name="phoneNumber"
                 type="tel"
+                required
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
                 placeholder="e.g. +231 780 835 562"
                 className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
               />
@@ -182,6 +352,10 @@ const BusinesssSignUp = () => {
                 id="email"
                 name="email"
                 type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="e.g. @john.com"
                 className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
               />
@@ -199,7 +373,11 @@ const BusinesssSignUp = () => {
                   id="password"
                   name="password"
                   type="password"
+                  required
+                  minLength={6}
                   autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                   className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#D5DDE5]"
                 />
               </div>
@@ -214,7 +392,11 @@ const BusinesssSignUp = () => {
                   id="confirm-password"
                   name="confirmPassword"
                   type="password"
+                  required
+                  minLength={6}
                   autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
                 />
               </div>
@@ -222,9 +404,12 @@ const BusinesssSignUp = () => {
 
             <button
               type="submit"
+              disabled={
+                isSubmitting || isLoadingCategories || categories.length === 0
+              }
               className="h-11 w-full rounded-sm bg-[#163B65] px-4 text-sm font-semibold text-white transition hover:bg-[#245681] focus:outline-none focus:ring-2 focus:ring-[#9BBAD1] focus:ring-offset-2"
             >
-              Create account
+              {isSubmitting ? "Creating account..." : "Create account"}
             </button>
           </form>
         </section>
@@ -233,4 +418,5 @@ const BusinesssSignUp = () => {
   );
 };
 
-export default BusinesssSignUp;
+export default BusinessSignUp;
+
