@@ -247,15 +247,17 @@ export default function AuthenticatedLandingPage() {
   return (
     <div className="bg-surface text-text min-h-screen flex flex-col">
       {/* Hero Section Container (Figma Node 280:3497 & 280:3496) */}
-      <section className="relative px-4 sm:px-6 lg:px-12 pt-6 pb-12 max-w-300 mx-auto w-full">
-        <div className="relative rounded-3xl overflow-hidden min-h-75 md:min-h-85 flex flex-col justify-between p-6 sm:p-10 md:p-12 shadow-md">
-          {/* Hero Background Image with Darkness Filter */}
-          <div
-            className="absolute inset-0 bg-cover bg-center pointer-events-none"
-            style={{
-              backgroundImage: 'url("/hero-image.png")',
-            }}
-          />
+      <section className="relative z-30 px-4 sm:px-6 lg:px-12 pt-6 pb-12 max-w-300 mx-auto w-full">
+        <div className="relative rounded-3xl min-h-75 md:min-h-85 flex flex-col justify-between p-6 sm:p-10 md:p-12 shadow-md">
+          {/* Hero Background Image with Darkness Filter - isolated in rounded overflow-hidden container */}
+          <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+            <div
+              className="w-full h-full bg-cover bg-center"
+              style={{
+                backgroundImage: 'url("/hero-image.png")',
+              }}
+            />
+          </div>
 
           {/* Hero Content */}
           <div className="max-w-xl z-10 space-y-3">
