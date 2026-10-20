@@ -1,4 +1,4 @@
-const NavHeader () => {
+const NavHeader = () => {
   return (
     <div></div>
   )
