@@ -12,8 +12,13 @@ import {
   AlertCircle,
   Loader2,
   ArrowRight,
-  Activity
+  Activity,
+  UserCheck,
+  Globe,
+  Mail,
+  Lock,
 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { LIBERIA_COUNTIES, getCountyCoordinates } from '@/lib/location';
 
@@ -25,6 +30,11 @@ interface CategoryItem {
 
 export default function BusinessRegisterPage() {
   const router = useRouter();
+
+  // Authentication State
+  const [authChecking, setAuthChecking] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   // Categories from Supabase
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -46,153 +56,187 @@ export default function BusinessRegisterPage() {
   const [bedCount, setBedCount] = useState<number | ''>('');
   const [openingHours, setOpeningHours] = useState('8:00 AM - 6:00 PM (Mon-Sat)');
 
-  // Contact / Account details
+  // Contact / Administrator Name
   const [ownerName, setOwnerName] = useState('');
-  const [accountEmail, setAccountEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Submission State
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // 1. Strict Authentication Guard & Data Pre-load
   useEffect(() => {
-    async function loadCategories() {
+    let isMounted = true;
+
+    async function checkAuthAndLoadData() {
       try {
-        const { data } = await supabase
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        // If not logged in, immediately redirect to login with return redirect
+        if (!session?.user) {
+          router.replace('/auth/login?redirect=/auth/business');
+          return;
+        }
+
+        if (!isMounted) return;
+        const user = session.user;
+        setCurrentUser(user);
+
+        // Fetch user's profile to prefill name and phone
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (isMounted) {
+          if (profile) {
+            setUserProfile(profile);
+            if (profile.full_name) setOwnerName(profile.full_name);
+            if (profile.phone) setPhone(profile.phone);
+          } else if (user.user_metadata?.full_name) {
+            setOwnerName(user.user_metadata.full_name);
+          }
+          if (user.email) {
+            setPublicEmail(user.email);
+          }
+        }
+
+        // Fetch categories
+        const { data: catData } = await supabase
           .from('categories')
           .select('id, name, slug')
           .order('name');
-        if (data && data.length > 0) {
-          setCategories(data);
-          setCategoryId(data[0].id);
-        } else {
-          // Fallback defaults if table is empty
-          const fallback = [
-            { id: '1', name: 'Hospital', slug: 'hospital' },
-            { id: '2', name: 'Clinic', slug: 'clinic' },
-            { id: '3', name: 'Pharmacy', slug: 'pharmacy' },
-            { id: '4', name: 'Diagnostic Lab', slug: 'diagnostic-lab' }
-          ];
-          setCategories(fallback);
-          setCategoryId(fallback[0].id);
+
+        if (isMounted) {
+          if (catData && catData.length > 0) {
+            setCategories(catData);
+            setCategoryId(catData[0].id);
+          } else {
+            const fallback: CategoryItem[] = [
+              { id: '1', name: 'Hospital', slug: 'hospital' },
+              { id: '2', name: 'Clinic', slug: 'clinic' },
+              { id: '3', name: 'Pharmacy', slug: 'pharmacy' },
+              { id: '4', name: 'Diagnostic Lab', slug: 'diagnostic-lab' },
+            ];
+            setCategories(fallback);
+            setCategoryId(fallback[0].id);
+          }
+          setAuthChecking(false);
         }
       } catch (err) {
-        console.error('Error fetching categories:', err);
+        console.error('Auth verification error:', err);
+        router.replace('/auth/login?redirect=/auth/business');
       }
     }
-    loadCategories();
-  }, []);
 
+    checkAuthAndLoadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  // Handle Form Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    if (!currentUser) {
+      setErrorMessage('You must be logged in to register a healthcare facility.');
+      router.replace('/auth/login?redirect=/auth/business');
+      return;
+    }
+
     // Validation
     if (!name.trim()) {
-      setErrorMessage('Please enter the facility name');
+      setErrorMessage('Please enter the official facility name');
       return;
     }
     if (!phone.trim()) {
       setErrorMessage('Please provide an official contact phone number');
       return;
     }
-    if (!accountEmail.trim()) {
-      setErrorMessage('Please provide an administrator account email');
-      return;
-    }
-    if (password.length < 6) {
-      setErrorMessage('Account password must be at least 6 characters long');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match');
-      return;
-    }
 
     setSubmitting(true);
 
     try {
-      // 1. Sign up the user profile as 'business_owner'
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: accountEmail.trim(),
-        password,
-        options: {
-          data: {
-            full_name: ownerName.trim() || name.trim(),
-            role: 'business_owner',
-            phone: phone.trim(),
-          },
-        },
+      // 1. Upgrade user's profile role to 'business_owner' (or retain 'admin')
+      const currentRole = userProfile?.role || currentUser.user_metadata?.role;
+      const targetRole = currentRole === 'admin' ? 'admin' : 'business_owner';
+
+      await supabase.from('profiles').upsert({
+        id: currentUser.id,
+        full_name: ownerName.trim() || userProfile?.full_name || currentUser.email?.split('@')[0],
+        phone: phone.trim() || userProfile?.phone || null,
+        role: targetRole,
       });
 
-      if (authError) throw authError;
-
-      const userId = authData.user?.id;
-
-      if (userId) {
-        // Upsert profile record
-        await supabase.from('profiles').upsert({
-          id: userId,
-          full_name: ownerName.trim() || name.trim(),
-          phone: phone.trim(),
-          role: 'business_owner',
-        });
-      }
-
-      // Generate slug from name
-      const slug = name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)+/g, '') + '-' + Math.random().toString(36).substring(2, 6);
+      // 2. Generate slug from facility name
+      const slug =
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)+/g, '') +
+        '-' +
+        Math.random().toString(36).substring(2, 6);
 
       // Coordinates from county centroid
       const coords = getCountyCoordinates(county);
 
-      // 2. Insert into businesses table
+      // 3. Insert into businesses table linked to this authenticated user
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
         .insert({
           name: name.trim(),
           slug,
           category_id: categoryId || null,
-          owner_id: userId || null,
+          owner_id: currentUser.id,
           address: address.trim() || null,
           county,
           town: town.trim() || null,
           phone: phone.trim(),
-          public_email: publicEmail.trim() || accountEmail.trim(),
+          public_email: publicEmail.trim() || currentUser.email,
           website_url: websiteUrl.trim() || null,
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
           source: 'business_registration',
           verification_status: 'pending',
           record_status: 'pending',
-          is_published: true, // published so it shows up or pending admin review
+          is_published: true,
         })
         .select()
         .single();
 
-      if (businessError) {
-        console.error('Error creating business record:', businessError);
-      }
+      if (businessError) throw businessError;
 
-      // 3. Insert into healthcare_facility_details if business created
+      // 4. Insert into healthcare_facility_details
       if (businessData?.id) {
-        await supabase.from('healthcare_facility_details').insert({
-          business_id: businessData.id,
-          facility_type: facilityLevel,
-          emergency_services: emergencyServices,
-          opening_hours_raw: openingHours,
-        });
+        const { error: detailsError } = await supabase
+          .from('healthcare_facility_details')
+          .insert({
+            business_id: businessData.id,
+            facility_type: facilityLevel,
+            emergency_services: emergencyServices,
+            opening_hours_raw: openingHours,
+          });
+
+        if (detailsError) {
+          console.warn('Facility details insertion notice:', detailsError.message);
+        }
       }
 
-      setSuccessMessage('Registration submitted successfully! Your facility listing is now submitted for verification.');
+      setSuccessMessage(
+        'Facility registered successfully! Your listing has been linked to your account and submitted for verification.'
+      );
+
+      // Smooth handoff to the Business Owner Dashboard
       setTimeout(() => {
         router.push('/dashboard');
-      }, 1800);
+      }, 1500);
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error
@@ -204,12 +248,29 @@ export default function BusinessRegisterPage() {
     }
   };
 
+  // Loading Screen while authenticating
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center max-w-sm w-full text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#DBEAFE] text-[#163B65] flex items-center justify-center mb-4 shadow-2xs">
+            <Loader2 className="w-7 h-7 animate-spin text-[#163B65]" />
+          </div>
+          <h2 className="text-lg font-bold text-[#163B65]">Verifying Your Account</h2>
+          <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+            Healthcare facility registration is restricted to authenticated Minzo users. Checking your session...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Top Header Card */}
         <div className="bg-white rounded-3xl p-8 sm:p-10 border border-gray-100 shadow-xs mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 mb-3">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -219,15 +280,26 @@ export default function BusinessRegisterPage() {
                 Register Your Healthcare Facility
               </h1>
               <p className="mt-2 text-sm text-gray-500 max-w-xl">
-                Join 249+ hospitals, clinics, and pharmacies across Liberia. Enhance your community visibility, manage patient inquiries, and build public trust.
+                Join 250+ hospitals, clinics, and pharmacies across Liberia. Enhance your community visibility, manage patient reviews, and build public trust.
               </p>
             </div>
-            <Link
-              href="/auth/login"
-              className="text-xs font-semibold text-[#163B65] hover:underline shrink-0"
-            >
-              Already registered? Log in &rarr;
-            </Link>
+
+            {/* Authenticated User Status Box */}
+            <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100/80 shrink-0 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#163B65]">
+                <UserCheck className="w-4 h-4 text-secondary" />
+                <span>Authenticated User</span>
+              </div>
+              <span className="text-xs text-gray-700 font-medium truncate max-w-55 sm:max-w-60">
+                {currentUser?.email}
+              </span>
+              <Link
+                href="/dashboard"
+                className="text-[11px] font-semibold text-[#163B65] hover:text-secondary hover:underline inline-flex items-center gap-1 mt-1"
+              >
+                Go to Business Dashboard &rarr;
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -265,7 +337,7 @@ export default function BusinessRegisterPage() {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Hope Community Health Center &amp; Maternity"
+                    placeholder="e.g. Hope Community Health Center & Maternity"
                     className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
                   />
                 </div>
@@ -300,8 +372,8 @@ export default function BusinessRegisterPage() {
                     <option value="secondary_hospital">Secondary / District Hospital</option>
                     <option value="tertiary_referral">Tertiary Referral Hospital</option>
                     <option value="specialized_center">Specialized Care Center</option>
-                    <option value="retail_pharmacy">Retail Pharmacy &amp; Dispensary</option>
-                    <option value="diagnostic_lab">Diagnostic &amp; Pathology Lab</option>
+                    <option value="retail_pharmacy">Retail Pharmacy & Dispensary</option>
+                    <option value="diagnostic_lab">Diagnostic & Pathology Lab</option>
                   </select>
                 </div>
               </div>
@@ -311,7 +383,7 @@ export default function BusinessRegisterPage() {
             <div>
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
                 <MapPin className="w-5 h-5 text-[#163B65]" />
-                <h2 className="text-base font-bold text-[#163B65]">2. Location &amp; Physical Address</h2>
+                <h2 className="text-base font-bold text-[#163B65]">2. Location & Physical Address</h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -347,7 +419,7 @@ export default function BusinessRegisterPage() {
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Street Address &amp; Landmarks
+                    Street Address & Landmarks
                   </label>
                   <input
                     type="text"
@@ -364,7 +436,7 @@ export default function BusinessRegisterPage() {
             <div>
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
                 <Activity className="w-5 h-5 text-[#163B65]" />
-                <h2 className="text-base font-bold text-[#163B65]">3. Services &amp; Emergency Readiness</h2>
+                <h2 className="text-base font-bold text-[#163B65]">3. Services & Emergency Readiness</h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -396,7 +468,7 @@ export default function BusinessRegisterPage() {
                 </div>
 
                 <div className="sm:col-span-2 flex flex-col sm:flex-row gap-4 pt-2">
-                  <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer flex-1">
+                  <label className="flex items-center gap-3 p-3.5 rounded-2xl border border-gray-200 bg-gray-50/60 cursor-pointer flex-1 hover:border-[#163B65]/40 transition">
                     <input
                       type="checkbox"
                       checked={emergencyServices}
@@ -409,7 +481,7 @@ export default function BusinessRegisterPage() {
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-gray-50/50 cursor-pointer flex-1">
+                  <label className="flex items-center gap-3 p-3.5 rounded-2xl border border-gray-200 bg-gray-50/60 cursor-pointer flex-1 hover:border-[#163B65]/40 transition">
                     <input
                       type="checkbox"
                       checked={ambulanceAvailable}
@@ -429,7 +501,7 @@ export default function BusinessRegisterPage() {
             <div>
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">
                 <Phone className="w-5 h-5 text-[#163B65]" />
-                <h2 className="text-base font-bold text-[#163B65]">4. Contact &amp; Management Account</h2>
+                <h2 className="text-base font-bold text-[#163B65]">4. Contact & Administrator Details</h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
@@ -474,14 +546,26 @@ export default function BusinessRegisterPage() {
                 </div>
 
                 <div className="sm:col-span-2 pt-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-3">
-                    Facility Administrator Account Credentials
-                  </span>
+                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-[#163B65] shrink-0">
+                        <Lock className="w-5 h-5 text-[#163B65]" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-gray-900 block">
+                          Connected Account: {currentUser?.email}
+                        </span>
+                        <span className="text-[11px] text-gray-500 block">
+                          This facility will be linked to your verified account. No separate password needed.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Representative / Admin Name
+                    Representative / Facility Administrator Name
                   </label>
                   <input
                     type="text"
@@ -491,54 +575,12 @@ export default function BusinessRegisterPage() {
                     className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Account Login Email *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={accountEmail}
-                    onChange={(e) => setAccountEmail(e.target.value)}
-                    placeholder="admin@facility.org"
-                    className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Password *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                    className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Confirm Password *
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                    className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Terms notice */}
             <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-amber-800 text-xs">
-              <span className="font-bold">Verification Notice:</span> All registered healthcare facilities undergo verification by the Minzo Liberia administrative team. You will be able to manage your profile immediately while the &ldquo;Verified&rdquo; badge is processed.
+              <span className="font-bold">Verification Notice:</span> All registered healthcare facilities undergo verification by the Minzo Liberia administrative team. You will be able to manage your profile and upload facility credentials in the Dashboard while the &ldquo;Verified&rdquo; badge is processed.
             </div>
 
             {/* Submit Button */}
@@ -550,7 +592,7 @@ export default function BusinessRegisterPage() {
               {submitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Submitting Registration...</span>
+                  <span>Submitting Facility Registration...</span>
                 </>
               ) : (
                 <>

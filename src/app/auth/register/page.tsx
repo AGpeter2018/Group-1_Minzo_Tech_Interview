@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, MapPin, Heart, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectedFrom = searchParams.get('redirect');
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -89,12 +91,15 @@ export default function RegisterPage() {
       if (data.session) {
         setSuccessMessage('Account created successfully! Welcome to Minzo Africa.');
         setTimeout(() => {
-          router.push('/home');
+          router.push(redirectedFrom || '/home');
         }, 1200);
       } else {
         setSuccessMessage('Account created! Please check your email inbox to verify your email address, then sign in.');
         setTimeout(() => {
-          router.push('/auth/login');
+          const target = redirectedFrom
+            ? `/auth/login?redirect=${encodeURIComponent(redirectedFrom)}`
+            : '/auth/login';
+          router.push(target);
         }, 2800);
       }
     } catch (err: any) {
@@ -126,7 +131,11 @@ export default function RegisterPage() {
           <div className="flex items-center gap-2 text-sm md:text-base">
             <span className="text-text font-medium">Already have account?</span>
             <Link
-              href="/auth/login"
+              href={
+                redirectedFrom
+                  ? `/auth/login?redirect=${encodeURIComponent(redirectedFrom)}`
+                  : '/auth/login'
+              }
               className="text-[#163B65] font-semibold hover:underline"
             >
               Login
@@ -134,130 +143,69 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* 2-Column Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-start">
-          {/* Left Column: Value Props & Illustration */}
-          <div className="flex flex-col space-y-8">
-            <h1 className="text-2xl sm:text-[28px] font-medium text-[#000000] tracking-tight leading-snug max-w-md">
-              Find trusted health care professionals near you
+        {/* Content Section - 2 Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-16 items-center">
+          {/* Left Column: Value Prop */}
+          <div className="space-y-6">
+            <h1 className="text-3xl md:text-5xl font-extrabold text-[#163B65] leading-tight">
+              Empowering Health Choices Across Liberia
             </h1>
+            <p className="text-gray-600 text-sm md:text-base leading-relaxed">
+              Join thousands of Liberians discovering verified hospitals, comparing medical services, rating clinics, and accessing trusted community healthcare.
+            </p>
 
-            {/* Feature Pills */}
-            <div className="space-y-6">
-              {/* Feature 1 */}
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[#E8EEF5] flex items-center justify-center text-[#22C55E] shrink-0 shadow-xs">
-                  <Check className="w-6 h-6 stroke-3" />
+            {/* Feature Checklist */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-secondary shrink-0">
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
-                <span className="text-base font-medium text-[#000000]">
-                  Verified Professionals
+                <span className="text-sm font-medium text-gray-700">
+                  Access 250+ verified hospitals & clinics in all 15 counties
                 </span>
               </div>
-
-              {/* Feature 2 */}
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[#E8EEF5] flex items-center justify-center text-[#22C55E] shrink-0 shadow-xs">
-                  <MapPin className="w-6 h-6 fill-[#22C55E]/20" />
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-secondary shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-secondary shrink-0" />
                 </div>
-                <span className="text-base font-medium text-[#000000]">
-                  Easy to find
+                <span className="text-sm font-medium text-gray-700">
+                  Find nearest emergency care with turn-by-turn directions
                 </span>
               </div>
-
-              {/* Feature 3 */}
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[#E8EEF5] flex items-center justify-center text-[#22C55E] shrink-0 shadow-xs">
-                  <Heart className="w-6 h-6 fill-[#22C55E]" />
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-secondary shrink-0">
+                  <Heart className="w-3.5 h-3.5 text-secondary shrink-0" />
                 </div>
-                <span className="text-base font-medium text-[#000000]">
-                  Better health decision
+                <span className="text-sm font-medium text-gray-700">
+                  Write honest reviews and help your community find quality care
                 </span>
-              </div>
-            </div>
-
-            {/* Illustration: Person sitting on sofa with mobile phone */}
-            <div className="relative pt-6 max-w-sm hidden md:block">
-              <div className="w-full bg-[#F5F2EB] border-radius: 20px; p-6 flex items-center justify-center border border-[#E8E2D5]">
-                <svg
-                  viewBox="0 0 320 220"
-                  className="w-full h-auto max-h-47.5"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  {/* Window in background */}
-                  <rect x="20" y="20" width="60" height="90" rx="4" fill="#CDE1EE" stroke="#486581" strokeWidth="3" />
-                  <line x1="50" y1="20" x2="50" y2="110" stroke="#486581" strokeWidth="2" />
-                  <line x1="20" y1="65" x2="80" y2="65" stroke="#486581" strokeWidth="2" />
-
-                  {/* Floor */}
-                  <line x1="10" y1="190" x2="310" y2="190" stroke="#D3C7B6" strokeWidth="3" />
-
-                  {/* Modern Sofa */}
-                  <rect x="60" y="115" width="160" height="65" rx="10" fill="#243B53" />
-                  <rect x="50" y="130" width="20" height="50" rx="6" fill="#334E68" />
-                  <rect x="210" y="130" width="20" height="50" rx="6" fill="#334E68" />
-                  <rect x="75" y="180" width="10" height="12" fill="#102A43" />
-                  <rect x="195" y="180" width="10" height="12" fill="#102A43" />
-
-                  {/* Person Sitting */}
-                  <circle cx="130" cy="85" r="14" fill="#F0C29F" />
-                  <path d="M120 78 C120 72 140 70 142 78 C144 85 130 92 120 85 Z" fill="#2D3748" />
-                  {/* Shirt */}
-                  <path d="M112 102 C115 95 145 95 148 102 L145 140 L115 140 Z" fill="#627D98" />
-                  {/* Trousers */}
-                  <path d="M115 140 L165 145 L175 180 L160 182 L150 155 L135 180 L120 180 Z" fill="#D9BA9B" />
-                  {/* Shoes */}
-                  <rect x="165" y="180" width="20" height="7" rx="3" fill="#102A43" />
-                  <rect x="115" y="180" width="15" height="7" rx="3" fill="#102A43" />
-                  {/* Arms & Phone */}
-                  <path d="M125 105 L145 125 L140 130 Z" fill="#F0C29F" />
-                  <rect x="142" y="118" width="10" height="16" rx="2" fill="#121313" />
-
-                  {/* Plant Table */}
-                  <rect x="245" y="145" width="40" height="6" rx="2" fill="#D3C7B6" />
-                  <line x1="250" y1="151" x2="250" y2="190" stroke="#826E58" strokeWidth="2" />
-                  <line x1="280" y1="151" x2="280" y2="190" stroke="#826E58" strokeWidth="2" />
-                  {/* Plant Pot & Leaves */}
-                  <path d="M255 145 L275 145 L272 128 L258 128 Z" fill="#486581" />
-                  <path d="M265 128 Q260 105 250 100 Q265 112 265 128" fill="#4AB057" />
-                  <path d="M265 128 Q265 100 270 95 Q272 110 265 128" fill="#38A169" />
-                  <path d="M265 128 Q275 108 285 105 Q275 115 265 128" fill="#4AB057" />
-                </svg>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Sign Up Form */}
-          <div className="bg-white max-w-md w-full">
-            <div className="mb-6">
-              <h2 className="text-2xl font-medium text-[#000000]">
-                Create a public account
-              </h2>
-              <p className="text-sm md:text-base text-black/70 font-medium mt-1">
-                Get started in few steps. It&apos;s quick and easy
-              </p>
-            </div>
+          {/* Right Column: Register Form Card */}
+          <div className="bg-white p-8 md:p-10 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Create an account</h2>
+            <p className="text-xs text-gray-500 mb-6">
+              Sign up to discover and review healthcare facilities across Liberia
+            </p>
 
-            {/* Error Banner */}
             {errorMessage && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-700 animate-in fade-in">
+              <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Success Banner */}
             {successMessage && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-sm text-green-700 animate-in fade-in">
-                <Check className="w-4 h-4 shrink-0" />
-                <span>{successMessage}</span>
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                {successMessage}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Full Name */}
               <div>
-                <label className="block text-xs font-normal text-[#212934] mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Full Name
                 </label>
                 <input
@@ -265,29 +213,27 @@ export default function RegisterPage() {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g John Doe"
-                  className="w-full h-11 px-3.5 bg-white border border-[#D5DDE5] rounded-lg text-sm text-[#212934] placeholder-gray-400 focus:outline-none focus:border-[#163B65] focus:ring-1 focus:ring-[#163B65]"
+                  placeholder="e.g. Marie Kollie"
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
                 />
               </div>
 
-              {/* Email */}
               <div>
-                <label className="block text-xs font-normal text-[#212934] mb-1">
-                  Email
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Email Address
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g John1@gmail.com"
-                  className="w-full h-11 px-3.5 bg-white border border-[#D5DDE5] rounded-lg text-sm text-[#212934] placeholder-gray-400 focus:outline-none focus:border-[#163B65] focus:ring-1 focus:ring-[#163B65]"
+                  placeholder="you@example.com"
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
                 />
               </div>
 
-              {/* Phone Number */}
               <div>
-                <label className="block text-xs font-normal text-[#212934] mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Phone Number
                 </label>
                 <input
@@ -295,47 +241,46 @@ export default function RegisterPage() {
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g +231780835562"
-                  className="w-full h-11 px-3.5 bg-white border border-[#D5DDE5] rounded-lg text-sm text-[#212934] placeholder-gray-400 focus:outline-none focus:border-[#163B65] focus:ring-1 focus:ring-[#163B65]"
+                  placeholder="+231 77 000 0000"
+                  className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
                 />
               </div>
 
-              {/* Password */}
-              <div>
-                <label className="block text-xs font-normal text-[#212934] mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="e.g .........."
-                  className="w-full h-11 px-3.5 bg-white border border-[#D5DDE5] rounded-lg text-sm text-[#212934] placeholder-gray-400 focus:outline-none focus:border-[#163B65] focus:ring-1 focus:ring-[#163B65]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    className="w-full px-4 py-2.5 text-sm bg-gray-50/70 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] focus:bg-white transition text-gray-800"
+                  />
+                </div>
               </div>
 
-              {/* Confirm Password */}
-              <div>
-                <label className="block text-xs font-normal text-[#212934] mb-1">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="e.g .........."
-                  className="w-full h-11 px-3.5 bg-white border border-[#D5DDE5] rounded-lg text-sm text-[#212934] placeholder-gray-400 focus:outline-none focus:border-[#163B65] focus:ring-1 focus:ring-[#163B65]"
-                />
-              </div>
-
-              {/* Submit Button */}
               <div className="pt-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-12 bg-[#163B65] text-white text-base md:text-lg font-bold rounded-lg hover:bg-[#0f2845] transition-colors flex items-center justify-center shadow-xs cursor-pointer disabled:opacity-70"
+                  className="w-full py-3 px-6 bg-[#163B65] hover:bg-[#112d4e] active:scale-[0.99] text-white font-bold rounded-xl transition shadow-md hover:shadow-lg disabled:opacity-60 flex items-center justify-center gap-2 min-h-11 text-sm cursor-pointer"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -351,10 +296,10 @@ export default function RegisterPage() {
               <p className="text-xs text-gray-500">
                 Are you a healthcare facility owner or manager?{' '}
                 <Link
-                  href="/signUp/business"
+                  href="/auth/business"
                   className="font-semibold text-[#163B65] hover:text-secondary underline ml-1"
                 >
-                  Register Your Business
+                  Register Your Facility
                 </Link>
               </p>
             </div>
@@ -362,5 +307,19 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-surface flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[#163B65]" />
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

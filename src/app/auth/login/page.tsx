@@ -37,6 +37,12 @@ function LoginForm() {
         type: 'success',
       };
     }
+    if (redirectedFrom === '/auth/business') {
+      return {
+        message: 'Please sign in to register and manage a healthcare facility on Minzo.',
+        type: 'admin',
+      };
+    }
     if (toastParam === 'admin_required' || msgParam) {
       return {
         message: msgParam || 'Please sign in with an administrator account to access the Admin Console.',
@@ -122,17 +128,16 @@ function LoginForm() {
         }
 
         setTimeout(() => {
+          if (redirectedFrom && (!redirectedFrom.startsWith('/admin') || role === 'admin')) {
+            router.push(redirectedFrom);
+            return;
+          }
           if (role === 'admin') {
             router.push('/admin');
           } else if (role === 'business' || role === 'business_owner') {
             router.push('/dashboard');
           } else {
-            // Standard user destination (protects user from being looped back into /admin)
-            const target =
-              redirectedFrom && !redirectedFrom.startsWith('/admin')
-                ? redirectedFrom
-                : '/home';
-            router.push(target);
+            router.push('/home');
           }
         }, 800);
       } else {
@@ -354,7 +359,11 @@ function LoginForm() {
         <div className="mt-8 text-center text-base">
           <span className="font-medium text-[#000000]">Don’t have an account? </span>
           <Link
-            href="/auth/register"
+            href={
+              redirectedFrom && redirectedFrom !== '/home'
+                ? `/auth/register?redirect=${encodeURIComponent(redirectedFrom)}`
+                : '/auth/register'
+            }
             className="font-medium text-[#163B65] hover:underline"
           >
             SignUp
