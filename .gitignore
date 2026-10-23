@@ -64,6 +64,11 @@ coverage/
 .env.test.local
 project
 data
+!data/
+data/*
+!data/businesses_cleaned.csv
+!data/clean_businesses_csv.py
+!data/README_Deliverable_3.txt
 
 # Added by ggshield
 .cache_ggshield
