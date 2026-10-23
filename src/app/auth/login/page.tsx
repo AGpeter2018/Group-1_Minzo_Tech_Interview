@@ -1,10 +1,19 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+  CheckCircle2,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { AppRole } from '@/types/database';
 
 function LoginForm() {
   const router = useRouter();
@@ -19,6 +28,25 @@ function LoginForm() {
   const [resetLoading, setResetLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(() => {
+    const toastParam = searchParams.get('toast');
+    const msgParam = searchParams.get('message');
+    if (toastParam === 'admin_required' || msgParam) {
+      return (
+        msgParam || 'Please sign in with an administrator account to access the Admin Console.'
+      );
+    }
+    return null;
+  });
+
+  // Auto-dismiss floating toast after 7 seconds
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(() => {
+      setToastMessage(null);
+    }, 7000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,34 +91,52 @@ function LoginForm() {
           } else {
             // Auto-provision profile row if not existing
             const userMeta = data.user.user_metadata || {};
+            const assignedRole: AppRole =
+              userMeta.role === 'admin'
+                ? 'admin'
+                : userMeta.role === 'business_owner' || userMeta.role === 'business'
+                ? 'business_owner'
+                : 'user';
+
             await supabase.from('profiles').upsert({
               id: data.user.id,
               full_name: userMeta.full_name || email.split('@')[0],
               phone: userMeta.phone || null,
-              role: (userMeta.role as any) || 'user',
+              role: assignedRole,
             });
-            if (userMeta.role) {
-              role = userMeta.role;
-            }
+            role = assignedRole;
           }
         } catch (profileErr) {
           console.warn('Profile lookup fallback:', profileErr);
+          const metaRole = data.user.user_metadata?.role;
+          if (metaRole) {
+            role = metaRole;
+          }
         }
 
         setTimeout(() => {
           if (role === 'admin') {
             router.push('/admin');
-          } else if (role === 'business') {
+          } else if (role === 'business' || role === 'business_owner') {
             router.push('/dashboard');
           } else {
-            router.push(redirectedFrom);
+            // Standard user destination (protects user from being looped back into /admin)
+            const target =
+              redirectedFrom && !redirectedFrom.startsWith('/admin')
+                ? redirectedFrom
+                : '/home';
+            router.push(target);
           }
         }, 800);
       } else {
         router.push(redirectedFrom);
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Invalid email or password. Please try again.');
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Invalid email or password. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -113,15 +159,44 @@ function LoginForm() {
 
       if (error) throw error;
       setSuccessMessage('Password reset link sent! Please check your email.');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Unable to send password reset link. Please check the email.');
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Unable to send password reset link. Please check the email.'
+      );
     } finally {
       setResetLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col justify-between">
+    <div className="min-h-screen bg-surface flex flex-col justify-between relative">
+      {/* Floating Toast Notification for Admin / Auth alerts */}
+      {toastMessage && (
+        <aside
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-5 right-5 z-50 max-w-sm sm:max-w-md bg-white border border-amber-300 rounded-2xl shadow-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-4 fade-in duration-300"
+        >
+          <div className="p-2 bg-amber-50 text-amber-600 rounded-xl shrink-0">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <div className="flex-1 pr-1">
+            <h4 className="text-sm font-bold text-gray-900 mb-0.5">Admin Access Required</h4>
+            <p className="text-xs text-gray-600 leading-relaxed">{toastMessage}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition cursor-pointer"
+            aria-label="Dismiss toast"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </aside>
+      )}
+
       {/* Top Bar with Brand Logo (Matching Figma node 280:1782) */}
       <header className="w-full px-6 md:px-20 pt-8 md:pt-10">
         <Link href="/" className="inline-flex items-center gap-3 group focus:outline-none">
@@ -146,6 +221,16 @@ function LoginForm() {
         </div>
 
         {/* Feedback Alerts */}
+        {toastMessage && (
+          <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 animate-in fade-in">
+            <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-bold block mb-0.5">Admin Login Required</span>
+              <span>{toastMessage}</span>
+            </div>
+          </div>
+        )}
+
         {errorMessage && (
           <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2.5 text-xs text-red-700 animate-in fade-in">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />

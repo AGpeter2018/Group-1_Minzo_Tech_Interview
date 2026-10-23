@@ -50,44 +50,6 @@ interface Message {
   suggestions?: string[];
 }
 
-// Initial conversation matching Figma mockup (Node 355:2035)
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'msg-1',
-    sender: 'user',
-    text: 'Hey, Good morning\nPlease which hospital is close to me?',
-    timestamp: '10:12AM',
-  },
-  {
-    id: 'msg-2',
-    sender: 'bot',
-    text: 'Here are few hospitals near your location',
-    facilities: [
-      {
-        id: 'bomi-govt-hospital',
-        name: 'Liberia Government Hospital (Tubmanburg)',
-        town: 'Tubmanburg',
-        county: 'Bomi County',
-        phone: '+231886410594',
-      },
-      {
-        id: 'buchanan-govt-hospital',
-        name: 'Liberia Government Hospital (Buchanan)',
-        town: 'Buchanan',
-        county: 'Grand Bassa County',
-        phone: '+231556442566',
-      },
-    ],
-    followUp: 'Would you like directions to one of these hospitals?',
-    suggestions: [
-      'Directions to Tubmanburg Hospital',
-      'Show 24/7 emergency facilities',
-      'Find pharmacies near me',
-    ],
-    timestamp: '10:12AM',
-  },
-];
-
 function formatCurrentTime(): string {
   const now = new Date();
   let hours = now.getHours();
@@ -99,9 +61,22 @@ function formatCurrentTime(): string {
   return `${hours}:${minutesStr}${ampm}`;
 }
 
+const WELCOME_MESSAGE: Message = {
+  id: 'msg-welcome',
+  sender: 'bot',
+  text: "Hello! Welcome to Minzo Africa. 👋\n\nI'm your AI healthcare assistant. Here is what I can help you do:\n• Find hospitals, clinics, and pharmacies near you\n• Check 24/7 emergency services and operating hours\n• Get facility contact numbers, addresses, and directions across Liberia\n\nHow can I help you today?",
+  suggestions: [
+    'Find hospitals near me',
+    '24/7 Emergency clinics',
+    'Pharmacies in Monrovia',
+    'Clinics in Montserrado',
+  ],
+  timestamp: 'Just now',
+};
+
 export function AiChatbot() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -219,33 +194,24 @@ export function AiChatbot() {
               phone: b.phone,
               website_url: b.website_url,
             }))
-          : [
-              {
-                id: 'bomi-govt-hospital',
-                name: 'Liberia Government Hospital (Tubmanburg)',
-                town: 'Tubmanburg',
-                county: 'Bomi County',
-                phone: '+231886410594',
-              },
-              {
-                id: 'buchanan-govt-hospital',
-                name: 'Liberia Government Hospital (Buchanan)',
-                town: 'Buchanan',
-                county: 'Grand Bassa County',
-                phone: '+231556442566',
-              },
-            ];
+          : [];
 
       const botMsg: Message = {
         id: createUniqueId('bot'),
         sender: 'bot',
-        text: `Here are healthcare facilities matching "${text}":`,
-        facilities: facilitiesList,
-        followUp: 'Would you like directions or emergency contact information?',
+        text:
+          facilitiesList.length > 0
+            ? `Here are healthcare facilities matching "${text}":`
+            : `I couldn't find any healthcare facilities matching "${text}". You can try searching by county (e.g. Montserrado, Nimba, Bong) or facility type (e.g. Hospital, Clinic, Pharmacy).`,
+        facilities: facilitiesList.length > 0 ? facilitiesList : undefined,
+        followUp:
+          facilitiesList.length > 0
+            ? 'Would you like directions or contact details for any of these facilities?'
+            : undefined,
         suggestions: [
-          'View facility phone numbers',
-          'Emergency services available',
-          'Search in Montserrado County',
+          'Hospitals in Montserrado',
+          '24/7 emergency facilities',
+          'Pharmacies near me',
         ],
         timestamp: formatCurrentTime(),
       };
@@ -256,22 +222,7 @@ export function AiChatbot() {
       const fallbackMsg: Message = {
         id: createUniqueId('bot'),
         sender: 'bot',
-        text: 'I found these trusted hospitals registered in our Liberia directory:',
-        facilities: [
-          {
-            name: 'Liberia Government Hospital (Tubmanburg)',
-            town: 'Tubmanburg',
-            county: 'Bomi County',
-            phone: '+231886410594',
-          },
-          {
-            name: 'Liberia Government Hospital (Buchanan)',
-            town: 'Buchanan',
-            county: 'Grand Bassa County',
-            phone: '+231556442566',
-          },
-        ],
-        followUp: 'Would you like directions to one of these hospitals?',
+        text: "I'm having trouble connecting to the directory right now. Please try your search again in a moment.",
         timestamp: formatCurrentTime(),
       };
       setMessages((prev) => [...prev, fallbackMsg]);
@@ -373,7 +324,7 @@ export function AiChatbot() {
                   {/* Bot Message Bubble */}
                   <div className="bg-white border border-[#212934] rounded-xl p-4 max-w-[85%] space-y-3.5 shadow-2xs">
                     {/* Main text */}
-                    <p className="text-sm text-[#212934] leading-relaxed font-normal">
+                    <p className="text-sm text-[#212934] leading-relaxed font-normal whitespace-pre-wrap">
                       {msg.text}
                     </p>
 

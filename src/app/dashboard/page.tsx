@@ -4,26 +4,21 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Building2,
   Phone,
   Mail,
-  MapPin,
   Star,
   Users,
   MessageSquare,
   ShieldCheck,
-  Clock,
   Activity,
   Plus,
   Loader2,
-  AlertCircle,
   CheckCircle2,
   LogOut,
   ExternalLink,
-  ChevronRight,
   Eye,
-  Check
 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Business, Message, Review, Staff } from '@/types/database';
 import { VerificationBadge } from '@/components/VerificationBadge';
@@ -32,7 +27,7 @@ export default function BusinessDashboardPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [facility, setFacility] = useState<Business | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -112,25 +107,38 @@ export default function BusinessDashboardPage() {
             setEditAmbulance(!!details.ambulance_available);
           }
 
-          // 2. Fetch Messages/Inquiries
+          // 2. Fetch Messages/Inquiries with joined sender profile
           const { data: msgData } = await supabase
             .from('messages')
-            .select('*')
+            .select(`
+              *,
+              profiles (
+                full_name,
+                phone,
+                avatar_url
+              )
+            `)
             .eq('business_id', userFacility.id)
             .order('created_at', { ascending: false });
           setMessages(msgData || []);
 
-          // 3. Fetch Reviews
+          // 3. Fetch Reviews with joined profiles
           const { data: revData } = await supabase
             .from('reviews')
-            .select('*')
+            .select(`
+              *,
+              profiles (
+                full_name,
+                avatar_url
+              )
+            `)
             .eq('business_id', userFacility.id)
             .order('created_at', { ascending: false });
           setReviews(revData || []);
 
-          // 4. Fetch Staff
+          // 4. Fetch Staff from public.staff
           const { data: staffData } = await supabase
-            .from('affiliated_staff')
+            .from('staff')
             .select('*')
             .eq('business_id', userFacility.id)
             .order('created_at', { ascending: false });
@@ -158,7 +166,7 @@ export default function BusinessDashboardPage() {
     }
   };
 
-  // Add affiliated medical staff
+  // Add medical staff
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!facility || !staffName.trim()) return;
@@ -166,14 +174,15 @@ export default function BusinessDashboardPage() {
     setSavingStaff(true);
     try {
       const { data: newStaff, error } = await supabase
-        .from('affiliated_staff')
+        .from('staff')
         .insert({
           business_id: facility.id,
           full_name: staffName.trim(),
-          specialty: staffSpecialty.trim() || staffCadre,
-          cadre: staffCadre,
-          license_number: staffLicense.trim() || null,
-          is_verified: true,
+          profession: staffSpecialty.trim() || staffCadre,
+          county: facility.county || null,
+          town: facility.town || null,
+          source: 'business_registration',
+          is_published: true,
         })
         .select()
         .single();
@@ -209,7 +218,7 @@ export default function BusinessDashboardPage() {
         .update({ phone: editPhone.trim() })
         .eq('id', facility.id);
 
-      // 2. Update healthcare_facility_details
+      // 2. Update healthcare_facility_details (matching live schema columns)
       const details = Array.isArray(facility.healthcare_facility_details)
         ? facility.healthcare_facility_details[0]
         : facility.healthcare_facility_details;
@@ -217,9 +226,8 @@ export default function BusinessDashboardPage() {
         await supabase
           .from('healthcare_facility_details')
           .update({
-            opening_hours: editHours.trim(),
+            opening_hours_raw: editHours.trim(),
             emergency_services: editEmergency,
-            ambulance_available: editAmbulance,
           })
           .eq('business_id', facility.id);
       }
@@ -439,70 +447,78 @@ export default function BusinessDashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`p-5 rounded-2xl border transition ${
-                      msg.is_read
-                        ? 'bg-gray-50/50 border-gray-100'
-                        : 'bg-emerald-50/30 border-emerald-200 shadow-2xs'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-gray-900">{msg.sender_name}</span>
+                {messages.map((msg) => {
+                  const profile = Array.isArray(msg.profiles) ? msg.profiles[0] : msg.profiles;
+                  const senderName = profile?.full_name || msg.sender_name || 'Patient Inquiry';
+                  const senderPhone = profile?.phone || msg.sender_phone;
+                  const senderEmail = msg.sender_email;
+                  const messageBody = msg.message || msg.body;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`p-5 rounded-2xl border transition ${
+                        msg.is_read
+                          ? 'bg-gray-50/50 border-gray-100'
+                          : 'bg-emerald-50/30 border-emerald-200 shadow-2xs'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-gray-900">{senderName}</span>
+                          {!msg.is_read && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <p className="text-xs font-semibold text-[#163B65] mb-1">
+                        Subject: {msg.subject || 'Direct Consultation Inquiry'}
+                      </p>
+                      <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-4">
+                        {messageBody}
+                      </p>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100/80 text-xs">
+                        <div className="flex items-center gap-4 text-gray-600">
+                          {senderPhone && (
+                            <a
+                              href={`tel:${senderPhone}`}
+                              className="inline-flex items-center gap-1.5 font-bold text-secondary hover:underline"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                              <span>Call {senderPhone}</span>
+                            </a>
+                          )}
+                          {senderEmail && (
+                            <a
+                              href={`mailto:${senderEmail}`}
+                              className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              <span>{senderEmail}</span>
+                            </a>
+                          )}
+                        </div>
+
                         {!msg.is_read && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-600 text-white">
-                            NEW
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMarkAsRead(msg.id)}
+                            className="px-3 py-1 bg-white border border-gray-300 hover:border-gray-400 rounded-lg text-xs font-semibold text-gray-700 cursor-pointer"
+                          >
+                            Mark as Read
+                          </button>
                         )}
                       </div>
-                      <span className="text-xs text-gray-400">
-                        {new Date(msg.created_at).toLocaleString()}
-                      </span>
                     </div>
-
-                    <p className="text-xs font-semibold text-[#163B65] mb-1">
-                      Subject: {msg.subject || 'Direct Consultation Inquiry'}
-                    </p>
-                    <p className="text-xs sm:text-sm text-gray-700 leading-relaxed mb-4">
-                      {msg.body}
-                    </p>
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100/80 text-xs">
-                      <div className="flex items-center gap-4 text-gray-600">
-                        {msg.sender_phone && (
-                          <a
-                            href={`tel:${msg.sender_phone}`}
-                            className="inline-flex items-center gap-1.5 font-bold text-secondary hover:underline"
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                            <span>Call {msg.sender_phone}</span>
-                          </a>
-                        )}
-                        {msg.sender_email && (
-                          <a
-                            href={`mailto:${msg.sender_email}`}
-                            className="inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>{msg.sender_email}</span>
-                          </a>
-                        )}
-                      </div>
-
-                      {!msg.is_read && (
-                        <button
-                          type="button"
-                          onClick={() => handleMarkAsRead(msg.id)}
-                          className="px-3 py-1 bg-white border border-gray-300 hover:border-gray-400 rounded-lg text-xs font-semibold text-gray-700 cursor-pointer"
-                        >
-                          Mark as Read
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -528,31 +544,38 @@ export default function BusinessDashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {reviews.map((rev) => (
-                  <div key={rev.id} className="p-5 rounded-2xl border border-gray-100 bg-[#FBFDFB] space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-3.5 h-3.5 ${
-                                i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
-                              }`}
-                            />
-                          ))}
+                {reviews.map((rev) => {
+                  const profile = Array.isArray(rev.profiles) ? rev.profiles[0] : rev.profiles;
+                  const authorName = rev.is_anonymous
+                    ? 'Anonymous Patient'
+                    : (profile?.full_name || rev.reviewer_name_display || 'Verified Patient');
+
+                  return (
+                    <div key={rev.id} className="p-5 rounded-2xl border border-gray-100 bg-[#FBFDFB] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3.5 h-3.5 ${
+                                  i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-xs font-bold text-gray-900">
+                            {authorName}
+                          </span>
                         </div>
-                        <span className="text-xs font-bold text-gray-900">
-                          {rev.is_anonymous ? 'Anonymous Liberian' : rev.reviewer_name_display || 'Verified Patient'}
+                        <span className="text-xs text-gray-400">
+                          {new Date(rev.created_at).toLocaleDateString()}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400">
-                        {new Date(rev.created_at).toLocaleDateString()}
-                      </span>
+                      <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{rev.comment}</p>
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{rev.comment}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -595,7 +618,7 @@ export default function BusinessDashboardPage() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-gray-900">{st.full_name}</h4>
-                      <p className="text-xs text-gray-500">{st.specialty || st.cadre}</p>
+                      <p className="text-xs text-gray-500">{st.profession || st.specialty || st.cadre || 'Healthcare Professional'}</p>
                       {st.license_number && (
                         <span className="text-[10px] text-gray-400 block mt-1">
                           License: {st.license_number}

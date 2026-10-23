@@ -2,32 +2,112 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ShieldCheck,
   Building2,
   CheckCircle2,
   XCircle,
-  AlertCircle,
   Star,
   Search,
-  Filter,
   Eye,
   Trash2,
   Loader2,
-  MapPin,
   ExternalLink,
   RefreshCw,
-  LogOut
 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Business, Review } from '@/types/database';
 import { VerificationBadge } from '@/components/VerificationBadge';
 
+function AdminSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] pb-16 animate-pulse">
+      {/* Top Admin Bar Skeleton */}
+      <header className="bg-[#163B65] text-white py-6 px-4 sm:px-6 lg:px-8 border-b border-[#0f2845]">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2.5">
+            <div className="h-5 w-48 bg-white/20 rounded-full" />
+            <div className="h-8 w-80 max-w-full bg-white/20 rounded-lg" />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-32 bg-white/20 rounded-xl" />
+            <div className="h-9 w-36 bg-white/20 rounded-xl" />
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 space-y-8">
+        {/* Metric Cards Skeleton */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs space-y-3">
+              <div className="h-3 w-24 bg-gray-200 rounded" />
+              <div className="h-8 w-16 bg-gray-300 rounded" />
+              <div className="h-2.5 w-32 bg-gray-100 rounded" />
+            </div>
+          ))}
+        </section>
+
+        {/* Navigation Tabs & Search Skeleton */}
+        <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="h-10 w-36 bg-gray-200 rounded-xl" />
+            <div className="h-10 w-36 bg-gray-200 rounded-xl" />
+            <div className="h-10 w-36 bg-gray-200 rounded-xl" />
+          </div>
+          <div className="h-10 w-64 max-w-full bg-gray-200 rounded-xl" />
+        </section>
+
+        {/* Content Card / Table Skeleton */}
+        <section className="bg-white rounded-3xl border border-gray-100 shadow-2xs overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+            <div className="space-y-1.5">
+              <div className="h-5 w-52 bg-gray-300 rounded" />
+              <div className="h-3.5 w-80 max-w-full bg-gray-200 rounded" />
+            </div>
+            <div className="h-8 w-28 bg-gray-200 rounded-lg" />
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {[1, 2, 3, 4, 5].map((idx) => (
+              <div key={idx} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-2xl bg-gray-200 shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-44 bg-gray-300 rounded" />
+                      <div className="h-4 w-20 bg-gray-200 rounded-full" />
+                    </div>
+                    <div className="h-3.5 w-64 max-w-full bg-gray-200 rounded" />
+                    <div className="h-3 w-40 bg-gray-100 rounded" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <div className="h-8 w-20 bg-gray-200 rounded-xl" />
+                  <div className="h-8 w-20 bg-gray-200 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 export default function AdminPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [activeTab, setActiveTab] = useState<'verifications' | 'directory' | 'reviews'>('verifications');
+
+  // Admin session state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminProfile, setAdminProfile] = useState<{ role?: string; full_name?: string } | null>(null);
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,38 +115,91 @@ export default function AdminPage() {
 
   // Action status message
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-
-  const loadAdminData = async () => {
-    setLoading(true);
-    try {
-      // 1. Fetch businesses
-      const { data: bData } = await supabase
-        .from('businesses')
-        .select(`
-          *,
-          category:categories(*)
-        `)
-        .order('created_at', { ascending: false });
-
-      setBusinesses(bData || []);
-
-      // 2. Fetch reviews
-      const { data: rData } = await supabase
-        .from('reviews')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      setReviews(rData || []);
-    } catch (err) {
-      console.error('Error fetching admin data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    loadAdminData();
-  }, []);
+    let isActive = true;
+
+    async function verifyAndLoad() {
+      try {
+        // 0. Verify active session
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        const user = authData?.user;
+
+        if (authError || !user) {
+          router.replace(
+            '/auth/login?redirect=/admin&toast=admin_required&message=Please+sign+in+as+an+admin+to+access+the+Admin+Console'
+          );
+          return;
+        }
+
+        // 1. Verify admin role in profiles table
+        const { data: prof, error: profError } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        const hasAdminRole =
+          prof?.role === 'admin' || user.user_metadata?.role === 'admin';
+
+        if (profError || !hasAdminRole) {
+          router.replace(
+            '/auth/login?redirect=/admin&toast=admin_required&message=Access+denied.+Administrator+privileges+are+required.'
+          );
+          return;
+        }
+
+        if (!isActive) return;
+        setCurrentUser(user);
+        setIsAdmin(true);
+        setAdminProfile(prof || null);
+
+        // 2. Fetch businesses
+        const { data: bData } = await supabase
+          .from('businesses')
+          .select(`
+            *,
+            category:categories(*)
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!isActive) return;
+        setBusinesses(bData || []);
+
+        // 3. Fetch reviews with joined profiles and target business
+        const { data: rData } = await supabase
+          .from('reviews')
+          .select(`
+            *,
+            profiles (
+              full_name,
+              avatar_url
+            ),
+            businesses (
+              id,
+              name
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (!isActive) return;
+        setReviews((rData as Review[]) || []);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error verifying admin authorization:', err);
+        router.replace(
+          '/auth/login?redirect=/admin&toast=admin_required&message=Please+sign+in+as+an+admin+to+access+the+Admin+Console'
+        );
+      }
+    }
+
+    void verifyAndLoad();
+
+    return () => {
+      isActive = false;
+    };
+  }, [router, refreshKey]);
 
   // Update facility verification status
   const handleUpdateStatus = async (
@@ -100,8 +233,9 @@ export default function AdminPage() {
         `Facility marked as ${newStatus.toUpperCase()} successfully.`
       );
       setTimeout(() => setActionMessage(null), 3500);
-    } catch (err: any) {
-      alert(`Error updating verification status: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update';
+      alert(`Error updating verification status: ${msg}`);
     }
   };
 
@@ -119,8 +253,9 @@ export default function AdminPage() {
       setReviews((prev) => prev.filter((r) => r.id !== reviewId));
       setActionMessage('Review removed from directory.');
       setTimeout(() => setActionMessage(null), 3000);
-    } catch (err: any) {
-      alert(`Error deleting review: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete';
+      alert(`Error deleting review: ${msg}`);
     }
   };
 
@@ -145,6 +280,10 @@ export default function AdminPage() {
 
   const pendingList = businesses.filter((b) => b.verification_status === 'pending');
 
+  if (loading || !isAdmin) {
+    return <AdminSkeleton />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-16">
       {/* Top Admin Bar */}
@@ -165,10 +304,18 @@ export default function AdminPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 text-xs font-semibold rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Admin: {adminProfile?.full_name || currentUser?.email}</span>
+            </span>
+
             <button
               type="button"
-              onClick={loadAdminData}
+              onClick={() => {
+                setLoading(true);
+                setRefreshKey((k) => k + 1);
+              }}
               disabled={loading}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition cursor-pointer"
             >
@@ -376,8 +523,8 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              {/* Search Filter */}
-              <div className="flex items-center gap-2">
+              {/* Search & County Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                   <input
@@ -388,6 +535,18 @@ export default function AdminPage() {
                     className="pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65]"
                   />
                 </div>
+                <select
+                  value={filterCounty}
+                  onChange={(e) => setFilterCounty(e.target.value)}
+                  className="py-1.5 px-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] text-gray-700"
+                >
+                  <option value="all">All Counties</option>
+                  {Array.from(new Set(businesses.map((b) => b.county).filter((c): c is string => Boolean(c)))).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -476,43 +635,68 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {reviews.map((r) => (
-                  <div
-                    key={r.id}
-                    className="p-4 rounded-2xl border border-gray-100 bg-[#FBFDFB] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-3.5 h-3.5 ${
-                                i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-xs font-bold text-gray-900">
-                          {r.is_anonymous ? 'Anonymous Liberian' : r.reviewer_name_display || 'Verified Patient'}
-                        </span>
-                        <span className="text-[11px] text-gray-400">
-                          {new Date(r.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-700">{r.comment}</p>
-                    </div>
+                {reviews.map((r) => {
+                  const profile = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+                  const targetBusiness = Array.isArray(r.businesses) ? r.businesses[0] : r.businesses;
+                  const reviewerName = r.is_anonymous
+                    ? 'Anonymous Patient'
+                    : (profile?.full_name || r.reviewer_name_display || 'Verified Patient');
 
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteReview(r.id)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer shrink-0"
+                  return (
+                    <div
+                      key={r.id}
+                      className="p-4 rounded-2xl border border-gray-100 bg-[#FBFDFB] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remove</span>
-                    </button>
-                  </div>
-                ))}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3.5 h-3.5 ${
+                                  i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          {profile?.avatar_url && !r.is_anonymous ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={profile.avatar_url}
+                              alt={reviewerName}
+                              className="w-4 h-4 rounded-full object-cover shrink-0"
+                            />
+                          ) : null}
+                          <span className="text-xs font-bold text-gray-900">
+                            {reviewerName}
+                          </span>
+                          {targetBusiness?.name && (
+                            <Link
+                              href={`/facility/${targetBusiness.id}`}
+                              className="text-[11px] font-semibold text-[#163B65] hover:underline flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded-md"
+                            >
+                              <span>For: {targetBusiness.name}</span>
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </Link>
+                          )}
+                          <span className="text-[11px] text-gray-400">
+                            {new Date(r.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-700">{r.comment}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteReview(r.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

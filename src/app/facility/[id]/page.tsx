@@ -255,6 +255,20 @@ export default function BusinessProfilePage() {
             review_count: revCount,
           });
         }
+        // Check if user is following this facility
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          const { data: followRecord } = await supabase
+            .from('follows')
+            .select('user_id')
+            .eq('user_id', authData.user.id)
+            .eq('business_id', facilityId)
+            .maybeSingle();
+
+          if (followRecord) {
+            setIsFollowing(true);
+          }
+        }
       } catch (err) {
         console.warn('Failed to load facility data, using fallback:', err);
         setFacility(FIGMA_DEFAULT_FACILITY);
@@ -265,6 +279,46 @@ export default function BusinessProfilePage() {
 
     loadFacility();
   }, [facilityId]);
+
+  // Handle Follow / Unfollow Toggle
+  const handleToggleFollow = async () => {
+    const nextState = !isFollowing;
+    setIsFollowing(nextState);
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+
+      if (!user) {
+        const stored: string[] = JSON.parse(
+          localStorage.getItem('minzo_followed_facilities') || '[]'
+        );
+        if (nextState) {
+          if (!stored.includes(facilityId)) stored.push(facilityId);
+        } else {
+          const idx = stored.indexOf(facilityId);
+          if (idx !== -1) stored.splice(idx, 1);
+        }
+        localStorage.setItem('minzo_followed_facilities', JSON.stringify(stored));
+        return;
+      }
+
+      if (nextState) {
+        await supabase.from('follows').upsert({
+          user_id: user.id,
+          business_id: facilityId,
+        });
+      } else {
+        await supabase
+          .from('follows')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('business_id', facilityId);
+      }
+    } catch (err) {
+      console.error('Error toggling facility follow status:', err);
+    }
+  };
 
   // Handle Review Submission
   const handleReviewSubmit = async (e: React.FormEvent) => {
@@ -648,7 +702,7 @@ export default function BusinessProfilePage() {
 
                 <button
                   type="button"
-                  onClick={() => setIsFollowing(!isFollowing)}
+                  onClick={handleToggleFollow}
                   className={`w-37.5 h-11 text-base font-bold rounded-lg border-[1.5px] border-[#163B65] transition-colors flex items-center justify-center cursor-pointer ${
                     isFollowing
                       ? 'bg-[#163B65] text-white'
