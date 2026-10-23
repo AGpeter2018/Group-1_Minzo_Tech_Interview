@@ -57,6 +57,8 @@ export interface Business {
   category?: Category;
   healthcare_facility_details?: HealthcareFacilityDetails | HealthcareFacilityDetails[] | null;
   owner?: Profile | null;
+  business_photos?: BusinessPhoto[];
+  business_documents?: BusinessDocument[];
   distance_km?: number;
   average_rating?: number | null;
   review_count?: number;

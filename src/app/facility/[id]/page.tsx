@@ -22,10 +22,11 @@ import {
   X,
   User,
   ExternalLink,
+  Navigation,
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { getCountyCoordinates } from '@/lib/location';
+import { getCountyCoordinates, calculateHaversineDistance } from '@/lib/location';
 
 interface ReviewDisplay {
   id: string;
@@ -50,6 +51,8 @@ interface FacilityDisplay {
   photo: string;
   description: string;
   opening_hours: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface DbReviewRow {
@@ -122,6 +125,20 @@ export default function BusinessProfilePage() {
   const [reviewSuccess, setReviewSuccess] = useState<string | null>(null);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+  const [userCoord, setUserCoord] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Capture user GPS location for live distance calculation
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {},
+        { timeout: 7000 }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -162,6 +179,8 @@ export default function BusinessProfilePage() {
             phone,
             public_email,
             website_url,
+            latitude,
+            longitude,
             verification_status,
             category:categories(name),
             healthcare_facility_details(
@@ -247,6 +266,8 @@ export default function BusinessProfilePage() {
             photo: FIGMA_DEFAULT_FACILITY.photo,
             description: details?.additional_notes || FIGMA_DEFAULT_FACILITY.description,
             opening_hours: details?.opening_hours_raw || FIGMA_DEFAULT_FACILITY.opening_hours,
+            latitude: data.latitude,
+            longitude: data.longitude,
           });
         } else {
           setFacility({
@@ -416,6 +437,13 @@ export default function BusinessProfilePage() {
   const isVerified = facility.verification_status === 'verified';
   const cleanCountyKey = facility.county?.replace(/ county/i, '').trim();
   const coords = getCountyCoordinates(cleanCountyKey || 'Bomi');
+  const facLat = facility.latitude || coords.latitude;
+  const facLng = facility.longitude || coords.longitude;
+
+  const distanceKm =
+    userCoord && facLat && facLng
+      ? calculateHaversineDistance(userCoord.lat, userCoord.lng, facLat, facLng)
+      : null;
 
   if (loading) {
     return (
@@ -509,6 +537,14 @@ export default function BusinessProfilePage() {
                 </span>
               </div>
 
+              {/* Dynamic Live Distance Badge */}
+              {distanceKm !== null && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200 w-fit">
+                  <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{distanceKm} km away from your location</span>
+                </div>
+              )}
+
               {/* Phone (Figma Node 342:1030 - Frame 23) */}
               <div className="flex items-center gap-2 text-base font-normal text-black">
                 <Phone className="w-4 h-4 text-gray-700 shrink-0" />
@@ -534,14 +570,25 @@ export default function BusinessProfilePage() {
               </div>
             </div>
 
-            {/* Right Call Button (Figma Node 342:1039) */}
-            <div className="w-full sm:w-auto shrink-0 flex sm:self-center">
+            {/* Right Call & Directions Buttons */}
+            <div className="w-full sm:w-auto shrink-0 flex flex-col sm:flex-row gap-2.5 sm:self-center">
               <a
                 href={`tel:${facility.phone}`}
-                className="w-full sm:w-37.5 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                className="w-full sm:w-32 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
               >
                 <Phone className="w-4 h-4" />
                 <span>Call</span>
+              </a>
+
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${facLat},${facLng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-36 h-11 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                title="Get turn-by-turn driving or walking directions"
+              >
+                <Navigation className="w-4 h-4" />
+                <span>Directions</span>
               </a>
             </div>
           </div>
@@ -679,20 +726,30 @@ export default function BusinessProfilePage() {
                 </div>
               </div>
 
-              {/* Bottom Actions Row: Call & Follow (Figma Node 342:1114 - Frame 68) */}
-              <div className="pt-2 flex items-center gap-4 flex-wrap">
+              {/* Bottom Actions Row: Call, Directions & Follow */}
+              <div className="pt-2 flex items-center gap-3 flex-wrap">
                 <a
                   href={`tel:${facility.phone}`}
-                  className="w-37.5 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                  className="w-32 h-11 bg-[#163B65] hover:bg-[#0f2845] text-white text-sm sm:text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                 >
                   <Phone className="w-4 h-4" />
                   <span>Call</span>
                 </a>
 
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${facLat},${facLng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-36 h-11 bg-emerald-600 hover:bg-emerald-700 text-white text-sm sm:text-base font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                >
+                  <Navigation className="w-4 h-4" />
+                  <span>Directions</span>
+                </a>
+
                 <button
                   type="button"
                   onClick={handleToggleFollow}
-                  className={`w-37.5 h-11 text-base font-bold rounded-lg border-[1.5px] border-[#163B65] transition-colors flex items-center justify-center cursor-pointer ${
+                  className={`w-32 h-11 text-sm sm:text-base font-bold rounded-lg border-[1.5px] border-[#163B65] transition-colors flex items-center justify-center cursor-pointer ${
                     isFollowing
                       ? 'bg-[#163B65] text-white'
                       : 'bg-white text-[#163B65] hover:bg-blue-50'
@@ -711,19 +768,20 @@ export default function BusinessProfilePage() {
                 height="100%"
                 className="border-0 w-full h-full"
                 loading="lazy"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${coords.longitude - 0.04}%2C${coords.latitude - 0.03}%2C${coords.longitude + 0.04}%2C${coords.latitude + 0.03}&layer=mapnik&marker=${coords.latitude}%2C${coords.longitude}`}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${facLng - 0.02}%2C${facLat - 0.015}%2C${facLng + 0.02}%2C${facLat + 0.015}&layer=mapnik&marker=${facLat}%2C${facLng}`}
               />
 
               {/* Map Footer Overlay with Open Link */}
-              <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-md shadow-xs text-xs font-semibold text-[#163B65] flex items-center gap-1 hover:bg-white transition">
+              <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur-xs px-3 py-1.5 rounded-lg shadow-md text-xs font-bold text-[#163B65] flex items-center gap-1.5 hover:bg-white transition border border-gray-200">
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${facility.name}, ${facility.town}, ${facility.county}, Liberia`)}`}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${facLat},${facLng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1.5 text-blue-700 hover:underline"
                 >
-                  <span>Open Maps</span>
-                  <ExternalLink className="w-3 h-3" />
+                  <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Get Directions</span>
+                  <ExternalLink className="w-3 h-3 text-gray-400" />
                 </a>
               </div>
             </div>
