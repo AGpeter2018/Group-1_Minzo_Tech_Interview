@@ -342,46 +342,35 @@ export default function BusinessProfilePage() {
         return;
       }
 
-      // If a custom reviewer name was provided and user profile exists, update profile full_name
       const customName = reviewerNameInput.trim();
-      if (customName && customName !== user.user_metadata?.full_name) {
-        try {
-          await supabase
-            .from('profiles')
-            .update({ full_name: customName })
-            .eq('id', user.id);
-        } catch {
-          // non-critical if profile row not present yet
-        }
+
+      // Get session access token for authenticated API request
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      // Submit through server API which auto-provisions profile if missing (prevents FK 23503)
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          business_id: facility.id,
+          rating: ratingInput,
+          comment: commentInput.trim(),
+          is_anonymous: isAnonymousInput,
+          reviewer_name: customName,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to submit review. Please try again.');
       }
 
-      const insertPayload = {
-        business_id: facility.id,
-        user_id: user.id,
-        rating: ratingInput,
-        comment: commentInput.trim(),
-        is_anonymous: isAnonymousInput,
-        status: 'published' as const,
-      };
-
-      const { data: newRev, error: revError } = await supabase
-        .from('reviews')
-        .insert(insertPayload)
-        .select(`
-          *,
-          profiles (
-            full_name,
-            avatar_url
-          )
-        `)
-        .single();
-
-      if (revError) {
-        console.error('Review submit error:', revError);
-        setReviewError(revError.message || 'Failed to submit review. Please try again.');
-        return;
-      }
-
+      const newRev = json.data;
       const profile = Array.isArray(newRev?.profiles) ? newRev.profiles[0] : newRev?.profiles;
       const displayName = isAnonymousInput
         ? 'Anonymous Patient'

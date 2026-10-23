@@ -15,6 +15,17 @@ import {
   Loader2,
   ExternalLink,
   RefreshCw,
+  Users,
+  LogOut,
+  Clock,
+  Check,
+  X,
+  MapPin,
+  Phone,
+  Mail,
+  Globe,
+  Stethoscope,
+  FileText,
 } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -97,11 +108,40 @@ function AdminSkeleton() {
   );
 }
 
+function formatSubmissionDate(dateStr?: string) {
+  if (!dateStr) return 'Recently';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(dateStr?: string) {
+  if (!dateStr) return '';
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  if (diffMinutes < 60) return `${Math.max(1, diffMinutes)}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 5) return `${diffWeeks}w ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths}mo ago`;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'verifications' | 'directory' | 'reviews'>('verifications');
 
   // Admin session state
@@ -116,6 +156,21 @@ export default function AdminPage() {
   // Action status message
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Business Details Dialog State
+  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedBusiness(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -155,12 +210,14 @@ export default function AdminPage() {
         setIsAdmin(true);
         setAdminProfile(prof || null);
 
-        // 2. Fetch businesses
+        // 2. Fetch businesses with clinical specifications and owner profile
         const { data: bData } = await supabase
           .from('businesses')
           .select(`
             *,
-            category:categories(*)
+            category:categories(*),
+            healthcare_facility_details(*),
+            owner:profiles!businesses_owner_id_fkey(*)
           `)
           .order('created_at', { ascending: false });
 
@@ -185,6 +242,17 @@ export default function AdminPage() {
 
         if (!isActive) return;
         setReviews((rData as Review[]) || []);
+
+        // 4. Fetch total users count (designer's metric)
+        const { count: uCount } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+
+        if (!isActive) return;
+        if (typeof uCount === 'number') {
+          setTotalUsers(uCount);
+        }
+
         setLoading(false);
       } catch (err) {
         console.error('Error verifying admin authorization:', err);
@@ -206,12 +274,15 @@ export default function AdminPage() {
     businessId: string,
     newStatus: 'verified' | 'rejected' | 'pending' | 'unverified'
   ) => {
+    setIsUpdatingStatus(true);
     try {
+      const recordStatus = newStatus === 'verified' ? 'published' : newStatus === 'rejected' ? 'rejected' : 'pending';
       const { error } = await supabase
         .from('businesses')
         .update({
           verification_status: newStatus,
           is_published: newStatus === 'verified' || newStatus === 'pending',
+          record_status: recordStatus,
         })
         .eq('id', businessId);
 
@@ -224,9 +295,22 @@ export default function AdminPage() {
                 ...b,
                 verification_status: newStatus,
                 is_published: newStatus === 'verified' || newStatus === 'pending',
+                record_status: recordStatus,
               }
             : b
         )
+      );
+
+      // Keep active dialog in sync if viewing this business
+      setSelectedBusiness((prev) =>
+        prev && prev.id === businessId
+          ? {
+              ...prev,
+              verification_status: newStatus,
+              is_published: newStatus === 'verified' || newStatus === 'pending',
+              record_status: recordStatus,
+            }
+          : prev
       );
 
       setActionMessage(
@@ -236,6 +320,8 @@ export default function AdminPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update';
       alert(`Error updating verification status: ${msg}`);
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -256,6 +342,20 @@ export default function AdminPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to delete';
       alert(`Error deleting review: ${msg}`);
+    }
+  };
+
+  // Sign out admin session
+  const handleSignOut = async () => {
+    if (!confirm('Are you sure you want to sign out from the Admin Console?')) return;
+    try {
+      await supabase.auth.signOut();
+      router.replace(
+        '/auth/login?toast=logged_out&message=You+have+been+signed+out+successfully.'
+      );
+    } catch (err) {
+      console.error('Error signing out:', err);
+      router.replace('/auth/login');
     }
   };
 
@@ -329,6 +429,16 @@ export default function AdminPage() {
               <Eye className="w-3.5 h-3.5" />
               <span>View Public Site</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 text-xs font-bold rounded-xl transition cursor-pointer"
+              title="Sign Out of Admin Console"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </div>
@@ -342,35 +452,58 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Overview Stats Cards */}
+        {/* Overview Stats Cards - Enhanced with Designer's metrics & icon badges */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-            <span className="text-xs text-gray-500 font-semibold block">Total Facilities</span>
-            <span className="text-2xl font-black text-[#163B65] mt-1 block">{totalCount}</span>
-            <span className="text-[11px] text-gray-400">Imported across 15 counties</span>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-            <span className="text-xs text-gray-500 font-semibold block">Verified Facilities</span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-emerald-600">{verifiedCount}</span>
-              <span className="text-xs font-bold text-gray-400">
-                ({totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0}%)
+          {/* Card 1: Total Facilities */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block">Total Businesses</span>
+              <span className="text-2xl font-black text-[#163B65] mt-1 block">{totalCount}</span>
+              <span className="text-[11px] text-gray-400">
+                {verifiedCount} verified ({totalCount > 0 ? Math.round((verifiedCount / totalCount) * 100) : 0}%)
               </span>
             </div>
-            <span className="text-[11px] text-gray-400">Active badge displayed</span>
+            <div className="w-11 h-11 rounded-xl bg-[#DBEAFE] text-[#1D4ED8] flex items-center justify-center shrink-0">
+              <Building2 className="w-5 h-5" />
+            </div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-            <span className="text-xs text-gray-500 font-semibold block">Pending Approval</span>
-            <span className="text-2xl font-black text-amber-500 mt-1 block">{pendingCount}</span>
-            <span className="text-[11px] text-amber-600 font-medium">Requires admin review</span>
+          {/* Card 2: Total Registered Users (Figma Card 2) */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block">Total Users</span>
+              <span className="text-2xl font-black text-[#163B65] mt-1 block">
+                {totalUsers !== null ? totalUsers.toLocaleString() : '—'}
+              </span>
+              <span className="text-[11px] text-gray-400">Registered platform profiles</span>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-[#DBEAFE] text-[#1D4ED8] flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs">
-            <span className="text-xs text-gray-500 font-semibold block">Patient Reviews</span>
-            <span className="text-2xl font-black text-[#163B65] mt-1 block">{reviews.length}</span>
-            <span className="text-[11px] text-gray-400">Total community ratings</span>
+          {/* Card 3: Pending Approval (Figma Card 3) */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block">Pending Approval</span>
+              <span className="text-2xl font-black text-amber-500 mt-1 block">{pendingCount}</span>
+              <span className="text-[11px] text-amber-600 font-medium">Requires admin review</span>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Card 4: Patient Reviews */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500 font-semibold block">Patient Reviews</span>
+              <span className="text-2xl font-black text-[#163B65] mt-1 block">{reviews.length}</span>
+              <span className="text-[11px] text-gray-400">Total community ratings</span>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
+              <Star className="w-5 h-5" />
+            </div>
           </div>
         </div>
 
@@ -451,54 +584,72 @@ export default function AdminPage() {
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase tracking-wider">
-                      <th className="py-3 px-3">Facility Name</th>
+                      <th className="py-3 px-3">Business</th>
                       <th className="py-3 px-3">Category</th>
-                      <th className="py-3 px-3">County / Town</th>
-                      <th className="py-3 px-3">Phone</th>
-                      <th className="py-3 px-3 text-right">Actions</th>
+                      <th className="py-3 px-3">Location</th>
+                      <th className="py-3 px-3">Submitted</th>
+                      <th className="py-3 px-3 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {pendingList.map((fac) => (
                       <tr key={fac.id} className="hover:bg-gray-50/50 transition">
                         <td className="py-3.5 px-3">
-                          <Link
-                            href={`/facility/${fac.id}`}
-                            target="_blank"
-                            className="font-bold text-gray-900 hover:text-[#163B65] flex items-center gap-1.5"
-                          >
-                            <span>{fac.name}</span>
-                            <ExternalLink className="w-3 h-3 text-gray-400" />
-                          </Link>
-                          {fac.address && <p className="text-[11px] text-gray-400 truncate max-w-xs">{fac.address}</p>}
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBusiness(fac)}
+                              className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-[#163B65] font-black flex items-center justify-center shrink-0 text-xs hover:bg-blue-100 transition cursor-pointer"
+                              title="Click to view details"
+                            >
+                              {fac.name.charAt(0).toUpperCase()}
+                            </button>
+                            <div className="text-left">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBusiness(fac)}
+                                className="font-bold text-gray-900 hover:text-[#163B65] hover:underline flex items-center gap-1.5 text-left cursor-pointer group"
+                                title="Click to view all facility details"
+                              >
+                                <span className="group-hover:text-blue-700 transition">{fac.name}</span>
+                                <FileText className="w-3.5 h-3.5 text-blue-500 opacity-80 group-hover:opacity-100 shrink-0" />
+                              </button>
+                              {fac.address && <p className="text-[11px] text-gray-400 truncate max-w-xs">{fac.address}</p>}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3.5 px-3">
-                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700">
+                          <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-100 text-gray-700">
                             {fac.category?.name || 'Healthcare'}
                           </span>
                         </td>
                         <td className="py-3.5 px-3 text-gray-600">
                           {fac.town ? `${fac.town}, ` : ''}{fac.county}
                         </td>
-                        <td className="py-3.5 px-3 text-gray-600 font-mono">
-                          {fac.phone || 'N/A'}
+                        <td className="py-3.5 px-3 text-gray-500 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                            <Clock className="w-3 h-3 text-gray-400" />
+                            {formatSubmissionDate(fac.created_at)}
+                          </span>
                         </td>
                         <td className="py-3.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => handleUpdateStatus(fac.id, 'verified')}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                              className="px-3.5 py-1.5 bg-[#4AB057] hover:bg-[#3ea04a] text-white font-semibold rounded-lg transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                              title="Approve and mark as verified"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Verify</span>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => handleUpdateStatus(fac.id, 'rejected')}
-                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 transition flex items-center gap-1 cursor-pointer"
+                              className="px-3.5 py-1.5 bg-white hover:bg-rose-50 text-[#DC2626] font-semibold rounded-lg border border-[#DC2626] transition flex items-center gap-1.5 cursor-pointer"
+                              title="Reject listing"
                             >
-                              <XCircle className="w-3.5 h-3.5" />
+                              <X className="w-3.5 h-3.5" />
                               <span>Reject</span>
                             </button>
                           </div>
@@ -565,14 +716,25 @@ export default function AdminPage() {
                   {filteredBusinesses.slice(0, 50).map((fac) => (
                     <tr key={fac.id} className="hover:bg-gray-50/50 transition">
                       <td className="py-3.5 px-3">
-                        <Link
-                          href={`/facility/${fac.id}`}
-                          target="_blank"
-                          className="font-bold text-gray-900 hover:text-[#163B65] flex items-center gap-1.5"
-                        >
-                          <span>{fac.name}</span>
-                          <ExternalLink className="w-3 h-3 text-gray-400" />
-                        </Link>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBusiness(fac)}
+                            className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-xs hover:bg-gray-200 transition cursor-pointer"
+                            title="Click to view details"
+                          >
+                            {fac.name.charAt(0).toUpperCase()}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBusiness(fac)}
+                            className="font-bold text-gray-900 hover:text-[#163B65] hover:underline flex items-center gap-1.5 text-left cursor-pointer group"
+                            title="Click to view all facility details"
+                          >
+                            <span className="group-hover:text-blue-700 transition">{fac.name}</span>
+                            <FileText className="w-3 h-3 text-gray-400 group-hover:text-blue-500 transition shrink-0" />
+                          </button>
+                        </div>
                       </td>
                       <td className="py-3.5 px-3">
                         <span className="text-gray-600">{fac.category?.name || 'Healthcare'}</span>
@@ -664,9 +826,13 @@ export default function AdminPage() {
                             <img
                               src={profile.avatar_url}
                               alt={reviewerName}
-                              className="w-4 h-4 rounded-full object-cover shrink-0"
+                              className="w-5 h-5 rounded-full object-cover shrink-0"
                             />
-                          ) : null}
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-blue-100 text-[#163B65] text-[10px] font-black flex items-center justify-center shrink-0">
+                              {reviewerName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                           <span className="text-xs font-bold text-gray-900">
                             {reviewerName}
                           </span>
@@ -680,7 +846,7 @@ export default function AdminPage() {
                             </Link>
                           )}
                           <span className="text-[11px] text-gray-400">
-                            {new Date(r.created_at).toLocaleDateString()}
+                            {formatRelativeTime(r.created_at) ? `(${formatRelativeTime(r.created_at)})` : new Date(r.created_at).toLocaleDateString()}
                           </span>
                         </div>
                         <p className="text-xs text-gray-700">{r.comment}</p>
@@ -689,10 +855,10 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteReview(r.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition cursor-pointer shrink-0"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#DC2626] bg-white hover:bg-rose-50 rounded-lg border border-[#DC2626] transition cursor-pointer shrink-0"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remove</span>
+                        <span>Delete</span>
                       </button>
                     </div>
                   );
@@ -702,6 +868,353 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* Business Details Modal Dialog */}
+      {selectedBusiness && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setSelectedBusiness(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Dialog Header */}
+            <div className="p-5 sm:p-6 border-b border-gray-100 bg-[#F8FAFC] flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#163B65] text-white font-black flex items-center justify-center text-lg sm:text-xl shrink-0 shadow-xs">
+                  {selectedBusiness.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">
+                      {selectedBusiness.category?.name || 'Healthcare Facility'}
+                    </span>
+                    <VerificationBadge status={selectedBusiness.verification_status} />
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                        selectedBusiness.is_published
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {selectedBusiness.is_published ? 'Published' : 'Unpublished'}
+                    </span>
+                  </div>
+                  <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                    {selectedBusiness.name}
+                  </h2>
+                  <p className="text-[11px] text-gray-500 font-mono">
+                    Slug: /{selectedBusiness.slug}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedBusiness(null)}
+                className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition cursor-pointer shrink-0"
+                title="Close dialog"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Dialog Scrollable Content */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs sm:text-sm">
+              {/* Section 1: Location & Contact */}
+              <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
+                <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Location & Contact Details</span>
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-gray-400 block font-medium">County & Town</span>
+                    <span className="font-bold text-gray-800">
+                      {selectedBusiness.town ? `${selectedBusiness.town}, ` : ''}
+                      {selectedBusiness.county || 'County not specified'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-gray-400 block font-medium">Physical Street Address</span>
+                    <span className="font-bold text-gray-800">
+                      {selectedBusiness.address || 'No street address provided'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-gray-400 block font-medium">Official Phone</span>
+                    {selectedBusiness.phone ? (
+                      <a
+                        href={`tel:${selectedBusiness.phone}`}
+                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>{selectedBusiness.phone}</span>
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 font-medium">None provided</span>
+                    )}
+                  </div>
+
+                  <div>
+                    <span className="text-gray-400 block font-medium">Public Email</span>
+                    {selectedBusiness.public_email ? (
+                      <a
+                        href={`mailto:${selectedBusiness.public_email}`}
+                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <Mail className="w-3 h-3" />
+                        <span>{selectedBusiness.public_email}</span>
+                      </a>
+                    ) : (
+                      <span className="text-gray-400 font-medium">None provided</span>
+                    )}
+                  </div>
+
+                  {selectedBusiness.website_url && (
+                    <div className="sm:col-span-2">
+                      <span className="text-gray-400 block font-medium">Website</span>
+                      <a
+                        href={
+                          selectedBusiness.website_url.startsWith('http')
+                            ? selectedBusiness.website_url
+                            : `https://${selectedBusiness.website_url}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <Globe className="w-3 h-3" />
+                        <span>{selectedBusiness.website_url}</span>
+                        <ExternalLink className="w-3 h-3 text-gray-400" />
+                      </a>
+                    </div>
+                  )}
+
+                  {selectedBusiness.latitude !== null &&
+                    selectedBusiness.latitude !== undefined &&
+                    selectedBusiness.longitude !== null &&
+                    selectedBusiness.longitude !== undefined && (
+                      <div className="sm:col-span-2 bg-white p-2.5 rounded-xl border border-gray-100 flex items-center justify-between">
+                        <div>
+                          <span className="text-gray-400 block font-medium text-[11px]">GPS Coordinates</span>
+                          <span className="font-mono text-gray-700 font-semibold text-xs">
+                            {selectedBusiness.latitude.toFixed(5)}, {selectedBusiness.longitude.toFixed(5)}
+                          </span>
+                        </div>
+                        <a
+                          href={`https://maps.google.com/?q=${selectedBusiness.latitude},${selectedBusiness.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                        >
+                          View on Google Maps &rarr;
+                        </a>
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              {/* Section 2: Healthcare Specifications */}
+              {(() => {
+                const details = Array.isArray(selectedBusiness.healthcare_facility_details)
+                  ? selectedBusiness.healthcare_facility_details[0]
+                  : selectedBusiness.healthcare_facility_details;
+
+                return (
+                  <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
+                    <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Stethoscope className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Healthcare Facility Specifications</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-gray-400 block font-medium">Facility Level / Type</span>
+                        <span className="font-bold text-gray-800">
+                          {details?.facility_type || selectedBusiness.category?.name || 'Healthcare Facility'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Registration / License #</span>
+                        <span className="font-mono font-bold text-gray-800">
+                          {details?.registration_number || 'Not registered / Pending license'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Opening Hours</span>
+                        <span className="font-bold text-gray-800">
+                          {details?.opening_hours_raw ||
+                            (typeof details?.opening_hours === 'string'
+                              ? details?.opening_hours
+                              : 'Standard clinic hours')}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Emergency Services</span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] ${
+                            details?.emergency_services
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {details?.emergency_services
+                            ? '24/7 Emergency Care'
+                            : 'Standard Routine Hours'}
+                        </span>
+                      </div>
+
+                      {details?.services && details.services.length > 0 && (
+                        <div className="sm:col-span-2 space-y-1.5 pt-1">
+                          <span className="text-gray-400 block font-medium">Medical Services Provided</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {details.services.map((svc, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-800 text-[11px] font-semibold shadow-2xs"
+                              >
+                                {svc}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {details?.additional_notes && (
+                        <div className="sm:col-span-2 pt-1">
+                          <span className="text-gray-400 block font-medium">Additional Facility Notes</span>
+                          <p className="p-3 bg-white rounded-xl border border-gray-100 text-gray-700 text-xs italic">
+                            &quot;{details.additional_notes}&quot;
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Section 3: Ownership & Registration Audit */}
+              <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
+                <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Ownership & Registration Audit</span>
+                </h3>
+
+                {(() => {
+                  const owner = Array.isArray(selectedBusiness.owner)
+                    ? selectedBusiness.owner[0]
+                    : selectedBusiness.owner;
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-gray-400 block font-medium">Registered Owner</span>
+                        <span className="font-bold text-gray-800">
+                          {owner?.full_name || 'Self / System Administrator'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Owner Phone</span>
+                        <span className="font-mono text-gray-700">
+                          {owner?.phone || 'Not available'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Data Source</span>
+                        <span className="font-semibold text-gray-700 capitalize">
+                          {selectedBusiness.source.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 block font-medium">Submission Date</span>
+                        <span className="font-mono text-gray-700">
+                          {formatSubmissionDate(selectedBusiness.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Dialog Footer Actions */}
+            <div className="p-4 sm:p-5 border-t border-gray-100 bg-[#F8FAFC] flex flex-col sm:flex-row items-center justify-between gap-3">
+              <Link
+                href={`/facility/${selectedBusiness.id}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#163B65] hover:bg-white rounded-xl transition border border-gray-200"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Public Facility Profile</span>
+              </Link>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {selectedBusiness.verification_status !== 'verified' && (
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'verified')}
+                    className="px-4 py-2 bg-[#4AB057] hover:bg-[#3ea04a] text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isUpdatingStatus ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Approve & Verify</span>
+                  </button>
+                )}
+
+                {selectedBusiness.verification_status !== 'rejected' && (
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'rejected')}
+                    className="px-4 py-2 bg-white hover:bg-rose-50 text-[#DC2626] border border-[#DC2626] text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isUpdatingStatus ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <X className="w-3.5 h-3.5" />
+                    )}
+                    <span>Reject Facility</span>
+                  </button>
+                )}
+
+                {selectedBusiness.verification_status === 'verified' && (
+                  <button
+                    type="button"
+                    disabled={isUpdatingStatus}
+                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'unverified')}
+                    className="px-3.5 py-2 text-xs font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-100 rounded-xl transition cursor-pointer disabled:opacity-50"
+                  >
+                    Unverify
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedBusiness(null)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

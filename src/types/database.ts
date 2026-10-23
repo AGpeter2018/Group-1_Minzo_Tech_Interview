@@ -56,6 +56,7 @@ export interface Business {
   // Join extensions
   category?: Category;
   healthcare_facility_details?: HealthcareFacilityDetails | HealthcareFacilityDetails[] | null;
+  owner?: Profile | null;
   distance_km?: number;
   average_rating?: number | null;
   review_count?: number;

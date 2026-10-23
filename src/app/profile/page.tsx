@@ -17,6 +17,10 @@ import {
   Loader2,
   X,
   Check,
+  Trash2,
+  ExternalLink,
+  Building2,
+  MessageSquare,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
@@ -33,6 +37,7 @@ interface BusinessRecord {
   phone?: string | null;
   website_url?: string | null;
   verification_status?: string | null;
+  category?: { name: string } | null;
   reviews?: BusinessReview[] | null;
 }
 
@@ -44,55 +49,67 @@ interface FollowRecord {
 interface FollowedFacility {
   id: string;
   name: string;
+  categoryName?: string;
   rating: number | null;
   review_count: number;
   verification_status: string;
-  town: string;
-  county: string;
-  phone: string;
-  website_url: string;
-  photo: string;
+  town?: string | null;
+  county?: string | null;
+  phone?: string | null;
+  website_url?: string | null;
+  photo?: string | null;
 }
 
-// Default followed facilities matching Figma node 343:1703
-const FIGMA_DEFAULT_FOLLOWS: FollowedFacility[] = [
-  {
-    id: 'bomi-govt-hospital',
-    name: 'Liberia Government Hospital (Tubmanburg)',
-    rating: 4.0,
-    review_count: 116,
-    verification_status: 'verified',
-    town: 'Tubmanburg',
-    county: 'Bomi County',
-    phone: '+231886410594',
-    website_url: 'www.liberiagovernment.com',
-    photo: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'harmony-bridge-pharmacy',
-    name: 'Harmony Bridge Pharmacy',
-    rating: 5.0,
-    review_count: 198,
-    verification_status: 'verified',
-    town: 'Main Street, Bomi Hills',
-    county: 'Bomi County',
-    phone: '+231777551423',
-    website_url: 'www.harmonybridge.com',
-    photo: 'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    id: 'buchanan-govt-hospital',
-    name: 'Liberia Government Hospital (Buchanan)',
-    rating: 3.0,
-    review_count: 116,
-    verification_status: 'verified',
-    town: 'Tubmanburg',
-    county: 'Bomi County',
-    phone: '+231556442566',
-    website_url: 'www.liberiagovernment.org',
-    photo: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=800&q=80',
-  },
-];
+interface UserReviewItem {
+  id: string;
+  rating: number;
+  comment: string | null;
+  is_anonymous: boolean;
+  status: string;
+  created_at: string;
+  businesses: {
+    id: string;
+    name: string;
+    town?: string | null;
+    county?: string | null;
+    verification_status?: string | null;
+    category?: { name: string } | null;
+  } | null;
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen bg-white text-black py-8 px-4 sm:px-6 animate-pulse">
+      <div className="max-w-216 mx-auto w-full space-y-9">
+        <div className="w-8 h-8 bg-gray-200 rounded-lg" />
+
+        {/* Stats Skeleton */}
+        <div className="flex items-center justify-center gap-8 sm:gap-16 flex-wrap">
+          <div className="w-43.25 h-20 rounded-lg border border-gray-200 bg-gray-50" />
+          <div className="w-43.25 h-20 rounded-lg border border-gray-200 bg-gray-50" />
+        </div>
+
+        {/* Hero Skeleton */}
+        <div className="bg-gray-50 rounded-2xl p-6 sm:p-8 flex flex-col md:flex-row items-center gap-6">
+          <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-gray-200 shrink-0" />
+          <div className="space-y-3 flex-1 w-full text-center md:text-left">
+            <div className="h-8 w-48 bg-gray-200 rounded-md mx-auto md:mx-0" />
+            <div className="h-4 w-36 bg-gray-200 rounded mx-auto md:mx-0" />
+            <div className="h-4 w-40 bg-gray-200 rounded mx-auto md:mx-0" />
+            <div className="h-4 w-44 bg-gray-200 rounded mx-auto md:mx-0" />
+            <div className="h-4 w-32 bg-gray-200 rounded mx-auto md:mx-0" />
+          </div>
+        </div>
+
+        {/* List Skeleton */}
+        <div className="space-y-4 pt-4">
+          <div className="h-6 w-48 bg-gray-200 rounded" />
+          <div className="h-32 bg-gray-50 border border-gray-200 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function UserProfilePage() {
   const router = useRouter();
@@ -101,19 +118,19 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<SupabaseUser | null>(null);
 
-  // Profile Details
-  const [profileName, setProfileName] = useState('John Doe');
-  const [profileLocation, setProfileLocation] = useState('Buchanan, Grand Bassa');
-  const [profilePhone, setProfilePhone] = useState('+231237942566');
-  const [profileEmail, setProfileEmail] = useState('johndoe@gmail.com');
-  const [memberSince, setMemberSince] = useState('Member since Oct, 2025');
-  const [avatarUrl, setAvatarUrl] = useState(
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=400&q=80'
-  );
+  // Live Profile Details
+  const [profileName, setProfileName] = useState('');
+  const [profileLocation, setProfileLocation] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [memberSince, setMemberSince] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
-  // Dynamic Metrics
-  const [reviewsCount, setReviewsCount] = useState(12);
-  const [followedBusinesses, setFollowedBusinesses] = useState<FollowedFacility[]>(FIGMA_DEFAULT_FOLLOWS);
+  // Live Metrics & Lists
+  const [reviewsCount, setReviewsCount] = useState(0);
+  const [followedBusinesses, setFollowedBusinesses] = useState<FollowedFacility[]>([]);
+  const [userReviews, setUserReviews] = useState<UserReviewItem[]>([]);
+  const [activeTab, setActiveTab] = useState<'following' | 'reviews'>('following');
 
   // Edit Profile Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -125,6 +142,8 @@ export default function UserProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
+    let isActive = true;
+
     async function loadUserProfile() {
       setLoading(true);
       try {
@@ -133,55 +152,91 @@ export default function UserProfilePage() {
         } = await supabase.auth.getSession();
 
         if (!session?.user) {
-          // If not authenticated, redirect to login
           router.replace('/auth/login?redirect=/profile');
           return;
         }
 
         const currentUser = session.user;
+        if (!isActive) return;
         setUser(currentUser);
 
-        // Fetch User Profile from Supabase
+        // 1. Fetch User Profile from Supabase profiles table
         const { data: profData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', currentUser.id)
           .maybeSingle();
 
-        if (profData) {
-          if (profData.full_name) setProfileName(profData.full_name);
-          if (profData.phone) setProfilePhone(profData.phone);
-          if (profData.avatar_url) setAvatarUrl(profData.avatar_url);
-        } else if (currentUser.user_metadata?.full_name) {
-          setProfileName(currentUser.user_metadata.full_name);
-        }
+        if (!isActive) return;
 
-        if (currentUser.email) {
-          setProfileEmail(currentUser.email);
-        }
+        const resolvedName =
+          profData?.full_name ||
+          currentUser.user_metadata?.full_name ||
+          currentUser.email?.split('@')[0] ||
+          'Verified User';
 
-        // Format Member Since date
-        if (currentUser.created_at) {
-          const date = new Date(currentUser.created_at);
-          const month = date.toLocaleString('default', { month: 'short' });
-          const year = date.getFullYear();
+        const resolvedPhone =
+          profData?.phone || currentUser.user_metadata?.phone || '';
+
+        const resolvedLocation =
+          (currentUser.user_metadata?.location as string) || '';
+
+        const resolvedAvatar =
+          profData?.avatar_url || currentUser.user_metadata?.avatar_url || '';
+
+        setProfileName(resolvedName);
+        setProfilePhone(resolvedPhone);
+        setProfileLocation(resolvedLocation);
+        setAvatarUrl(resolvedAvatar);
+        setProfileEmail(currentUser.email || '');
+
+        // Format Member Since date from real account creation timestamp
+        const accountCreated = currentUser.created_at || profData?.created_at;
+        if (accountCreated) {
+          const d = new Date(accountCreated);
+          const month = d.toLocaleString('en-US', { month: 'short' });
+          const year = d.getFullYear();
           setMemberSince(`Member since ${month}, ${year}`);
+        } else {
+          setMemberSince('Member of Minzo Africa');
         }
 
-        // Fetch reviews count for this user
-        const { count: userRevCount } = await supabase
+        // 2. Fetch live reviews count and list for this user
+        const { data: revList, count: userRevCount } = await supabase
           .from('reviews')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', currentUser.id);
+          .select(
+            `
+            id,
+            rating,
+            comment,
+            is_anonymous,
+            status,
+            created_at,
+            businesses (
+              id,
+              name,
+              town,
+              county,
+              verification_status,
+              category:categories(name)
+            )
+          `,
+            { count: 'exact' }
+          )
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false });
 
-        if (typeof userRevCount === 'number' && userRevCount > 0) {
-          setReviewsCount(userRevCount);
-        }
+        if (!isActive) return;
 
-        // Fetch followed facilities from Supabase follows table
+        const liveReviewsCount = typeof userRevCount === 'number' ? userRevCount : (revList?.length || 0);
+        setReviewsCount(liveReviewsCount);
+        setUserReviews((revList as unknown as UserReviewItem[]) || []);
+
+        // 3. Fetch live followed facilities from Supabase follows table
         const { data: followRecords } = await supabase
           .from('follows')
-          .select(`
+          .select(
+            `
             business_id,
             businesses (
               id,
@@ -191,16 +246,22 @@ export default function UserProfilePage() {
               phone,
               website_url,
               verification_status,
-              reviews(rating)
+              category:categories(name),
+              reviews (
+                rating
+              )
             )
-          `)
+          `
+          )
           .eq('user_id', currentUser.id);
+
+        if (!isActive) return;
 
         if (followRecords && followRecords.length > 0) {
           const typedRecords = followRecords as unknown as FollowRecord[];
           const mappedFollows: FollowedFacility[] = typedRecords
             .filter((f): f is FollowRecord & { businesses: BusinessRecord } => Boolean(f.businesses))
-            .map((f, idx: number) => {
+            .map((f) => {
               const b = f.businesses;
               const revs = b.reviews || [];
               const revCount = revs.length;
@@ -217,46 +278,36 @@ export default function UserProfilePage() {
               return {
                 id: b.id,
                 name: b.name,
+                categoryName: b.category?.name || 'Healthcare',
                 rating: avgRating,
                 review_count: revCount,
-                verification_status: b.verification_status || 'verified',
-                town: b.town || 'Tubmanburg',
-                county: b.county ? `${b.county} County` : 'Bomi County',
-                phone: b.phone || '+231886410594',
-                website_url: b.website_url || 'www.liberiagovernment.com',
-                photo: FIGMA_DEFAULT_FOLLOWS[idx % FIGMA_DEFAULT_FOLLOWS.length].photo,
+                verification_status: b.verification_status || 'unverified',
+                town: b.town || null,
+                county: b.county || null,
+                phone: b.phone || null,
+                website_url: b.website_url || null,
+                photo: null,
               };
             });
 
           setFollowedBusinesses(mappedFollows);
         } else {
-          // Check local storage for followed facility IDs or fallback to Figma design
-          const localFollowsJson = localStorage.getItem('minzo_followed_facilities');
-          if (localFollowsJson) {
-            try {
-              const storedIds = JSON.parse(localFollowsJson);
-              if (Array.isArray(storedIds) && storedIds.length > 0) {
-                // Filter FIGMA_DEFAULT_FOLLOWS or show stored
-                const matched = FIGMA_DEFAULT_FOLLOWS.filter((f) =>
-                  storedIds.includes(f.id)
-                );
-                if (matched.length > 0) {
-                  setFollowedBusinesses(matched);
-                }
-              }
-            } catch {
-              // fallback remains default
-            }
-          }
+          setFollowedBusinesses([]);
         }
       } catch (err) {
-        console.warn('Error loading profile:', err);
+        console.error('Error loading profile:', err);
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     }
 
-    loadUserProfile();
+    void loadUserProfile();
+
+    return () => {
+      isActive = false;
+    };
   }, [router]);
 
   // Handle Unfollow
@@ -265,17 +316,41 @@ export default function UserProfilePage() {
     const updated = followedBusinesses.filter((f) => f.id !== facilityId);
     setFollowedBusinesses(updated);
 
-    // Update localStorage
+    // Update localStorage sync if present
     const remainingIds = updated.map((f) => f.id);
-    localStorage.setItem('minzo_followed_facilities', JSON.stringify(remainingIds));
+    try {
+      localStorage.setItem('minzo_followed_facilities', JSON.stringify(remainingIds));
+    } catch {
+      // ignore
+    }
 
-    // Delete from Supabase if logged in
+    // Delete from Supabase follows table
     if (user) {
       await supabase
         .from('follows')
         .delete()
         .eq('user_id', user.id)
         .eq('business_id', facilityId);
+    }
+  };
+
+  // Handle Delete Review
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!confirm('Are you sure you want to delete this review?')) return;
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('user_id', user?.id || '');
+
+      if (error) throw error;
+
+      setUserReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      setReviewsCount((prev) => Math.max(0, prev - 1));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete review';
+      alert(msg);
     }
   };
 
@@ -292,18 +367,32 @@ export default function UserProfilePage() {
   // Save Profile
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setSavingProfile(true);
 
     try {
-      if (user) {
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: editName.trim(),
-          phone: editPhone.trim(),
-          avatar_url: editAvatar.trim(),
-          updated_at: new Date().toISOString(),
-        });
+      // 1. Update public.profiles table
+      const { error: profError } = await supabase.from('profiles').upsert({
+        id: user.id,
+        full_name: editName.trim(),
+        phone: editPhone.trim() || null,
+        avatar_url: editAvatar.trim() || null,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (profError) {
+        console.warn('Profile table update notice:', profError);
       }
+
+      // 2. Update user metadata for location & profile
+      await supabase.auth.updateUser({
+        data: {
+          full_name: editName.trim(),
+          phone: editPhone.trim() || null,
+          location: editLocation.trim() || null,
+          avatar_url: editAvatar.trim() || null,
+        },
+      });
 
       setProfileName(editName.trim());
       setProfilePhone(editPhone.trim());
@@ -314,28 +403,24 @@ export default function UserProfilePage() {
       setTimeout(() => {
         setIsEditModalOpen(false);
         setSaveSuccess(false);
-      }, 1200);
+      }, 1000);
     } catch (err) {
       console.error('Failed to save profile:', err);
+      alert('Failed to save profile. Please try again.');
     } finally {
       setSavingProfile(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center py-24 text-gray-500 gap-3">
-        <Loader2 className="w-10 h-10 animate-spin text-[#163B65]" />
-        <p className="text-sm font-medium">Loading user profile...</p>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (
     <div className="min-h-screen bg-white text-black py-8 px-4 sm:px-6">
       <div className="max-w-216 mx-auto w-full space-y-9">
         {/* =========================================================================
-            1. TOP BACK ARROW (Figma Node 343:1705 - dashicons:arrow-left-alt2)
+            1. TOP BACK ARROW
         ========================================================================= */}
         <div>
           <button
@@ -350,53 +435,65 @@ export default function UserProfilePage() {
         </div>
 
         {/* =========================================================================
-            2. METRIC SUMMARY STAT CARDS (Figma Node 343:1707 Frame 92 & 343:1716 Frame 93)
+            2. METRIC SUMMARY STAT CARDS (Interactive & Live)
         ========================================================================= */}
-        <div className="flex items-center justify-center gap-8 sm:gap-16 flex-wrap">
-          {/* Card 1: Reviews (Frame 92) */}
-          <div className="w-43.25 h-20 rounded-lg border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
-            {/* Eye Icon Circle (Frame 62) */}
+        <div className="flex items-center justify-center gap-6 sm:gap-12 flex-wrap">
+          {/* Card 1: Reviews */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('reviews')}
+            className={`w-43.25 h-20 rounded-xl border-[1.5px] p-2 flex items-center justify-between px-3.5 transition cursor-pointer shadow-xs ${
+              activeTab === 'reviews'
+                ? 'border-[#163B65] bg-blue-50/50 ring-2 ring-blue-500/20'
+                : 'border-gray-200 bg-white hover:border-[#163B65]/40'
+            }`}
+          >
             <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary shrink-0">
               <Eye className="w-5 h-5 stroke-[2.2]" />
             </div>
 
-            {/* Label & Number (Frame 63) */}
             <div className="flex-1 text-center">
-              <span className="block text-base font-medium text-[#163B65] leading-tight">
+              <span className="block text-sm font-semibold text-[#163B65] leading-tight">
                 Reviews
               </span>
-              <span className="block text-2xl font-semibold text-[#163B65] leading-tight mt-0.5">
+              <span className="block text-2xl font-black text-[#163B65] leading-tight mt-0.5">
                 {reviewsCount}
               </span>
             </div>
-          </div>
+          </button>
 
-          {/* Card 2: Following (Frame 93) */}
-          <div className="w-43.25 h-20 rounded-lg border-[0.2px] border-[#163B65] shadow-[0_2px_4px_rgba(0,0,0,0.15)] bg-white p-2 flex items-center justify-between px-3">
-            {/* Heart Icon Circle (Frame 62) */}
-            <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary shrink-0">
-              <Heart className="w-5 h-5 stroke-[2.2]" />
+          {/* Card 2: Following */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('following')}
+            className={`w-43.25 h-20 rounded-xl border-[1.5px] p-2 flex items-center justify-between px-3.5 transition cursor-pointer shadow-xs ${
+              activeTab === 'following'
+                ? 'border-[#163B65] bg-blue-50/50 ring-2 ring-blue-500/20'
+                : 'border-gray-200 bg-white hover:border-[#163B65]/40'
+            }`}
+          >
+            <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
+              <Heart className="w-5 h-5 stroke-[2.2] fill-rose-500/20" />
             </div>
 
-            {/* Label & Number (Frame 63) */}
             <div className="flex-1 text-center">
-              <span className="block text-base font-medium text-[#163B65] leading-tight">
+              <span className="block text-sm font-semibold text-[#163B65] leading-tight">
                 Following
               </span>
-              <span className="block text-2xl font-semibold text-[#163B65] leading-tight mt-0.5">
+              <span className="block text-2xl font-black text-[#163B65] leading-tight mt-0.5">
                 {followedBusinesses.length}
               </span>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* =========================================================================
-            3. USER PROFILE HERO CARD (Figma Node 343:1723 - Frame 97)
+            3. USER PROFILE HERO CARD
         ========================================================================= */}
-        <section className="bg-[#163B65]/5 rounded-lg p-6 sm:p-8 relative">
+        <section className="bg-[#163B65]/5 rounded-2xl p-6 sm:p-8 border border-gray-100 relative">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 sm:gap-8">
-            {/* User Portrait Avatar (Figma Node 343:1724 - Frame 92) */}
-            <div className="w-44 h-44 sm:w-52 sm:h-52 rounded-full overflow-hidden shrink-0 shadow-sm ring-4 ring-white bg-gray-100 flex items-center justify-center">
+            {/* User Portrait Avatar */}
+            <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden shrink-0 shadow-md ring-4 ring-white bg-[#163B65] flex items-center justify-center text-white">
               {avatarUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -405,54 +502,58 @@ export default function UserProfilePage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full bg-[#163B65] text-white text-5xl font-bold flex items-center justify-center uppercase">
-                  {profileName.charAt(0)}
-                </div>
+                <span className="text-5xl font-black uppercase tracking-wider">
+                  {profileName.charAt(0) || 'U'}
+                </span>
               )}
             </div>
 
-            {/* User Details (Figma Node 343:1728 - Frame 26) */}
-            <div className="flex-1 space-y-3.5 w-full text-center md:text-left">
+            {/* User Details */}
+            <div className="flex-1 space-y-3 w-full text-center md:text-left">
               {/* Full Name */}
-              <h1 className="text-3xl font-semibold text-black tracking-tight leading-snug">
-                {profileName}
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight leading-snug">
+                {profileName || 'Minzo Member'}
               </h1>
 
               {/* Location */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 text-base font-medium text-black">
-                <MapPin className="w-5 h-5 text-black shrink-0" />
-                <span>{profileLocation}</span>
+              <div className="flex items-center justify-center md:justify-start gap-2.5 text-sm sm:text-base font-medium text-gray-700">
+                <MapPin className="w-4 h-4 text-[#163B65] shrink-0" />
+                <span>{profileLocation || 'Liberia'}</span>
               </div>
 
               {/* Phone */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 text-base font-medium text-black">
-                <Phone className="w-4 h-4 text-black shrink-0" />
-                <a href={`tel:${profilePhone}`} className="hover:text-[#163B65] transition">
-                  {profilePhone}
-                </a>
+              <div className="flex items-center justify-center md:justify-start gap-2.5 text-sm sm:text-base font-medium text-gray-700">
+                <Phone className="w-4 h-4 text-[#163B65] shrink-0" />
+                {profilePhone ? (
+                  <a href={`tel:${profilePhone}`} className="hover:text-[#163B65] transition">
+                    {profilePhone}
+                  </a>
+                ) : (
+                  <span className="text-gray-400 font-normal">No phone number provided</span>
+                )}
               </div>
 
               {/* Email */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 text-base font-medium text-black">
-                <Mail className="w-5 h-5 text-black shrink-0" />
+              <div className="flex items-center justify-center md:justify-start gap-2.5 text-sm sm:text-base font-medium text-gray-700">
+                <Mail className="w-4 h-4 text-[#163B65] shrink-0" />
                 <a href={`mailto:${profileEmail}`} className="hover:text-[#163B65] transition">
                   {profileEmail}
                 </a>
               </div>
 
               {/* Member Since */}
-              <div className="flex items-center justify-center md:justify-start gap-2.5 text-base font-medium text-black">
-                <Calendar className="w-5 h-5 text-black shrink-0" />
+              <div className="flex items-center justify-center md:justify-start gap-2.5 text-sm sm:text-base font-medium text-gray-500">
+                <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
                 <span>{memberSince}</span>
               </div>
             </div>
 
-            {/* Edit Profile Action Button (Figma Node 343:1753) */}
+            {/* Edit Profile Action Button */}
             <div className="w-full sm:w-auto flex justify-center md:justify-end self-center md:self-end mt-4 md:mt-0">
               <button
                 type="button"
                 onClick={handleOpenEditModal}
-                className="w-37.5 h-11 border-[1.5px] border-[#163B65] text-[#163B65] font-bold text-base rounded-lg hover:bg-blue-50 transition cursor-pointer flex items-center justify-center shadow-xs"
+                className="w-36 h-10.5 border border-[#163B65] text-[#163B65] bg-white font-bold text-sm rounded-xl hover:bg-blue-50 transition cursor-pointer flex items-center justify-center shadow-2xs"
               >
                 <span>Edit Profile</span>
               </button>
@@ -461,137 +562,273 @@ export default function UserProfilePage() {
         </section>
 
         {/* =========================================================================
-            4. FOLLOWED BUSINESS SECTION (Figma Node 343:1754 & Frame 39)
+            4. TABS: FOLLOWED BUSINESSES & MY REVIEWS
         ========================================================================= */}
         <section className="space-y-6 pt-2">
-          {/* Section Header */}
-          <h2 className="text-3xl font-semibold text-black tracking-tight">
-            Followed Business
-          </h2>
+          {/* Tabs bar */}
+          <div className="flex items-center gap-6 border-b border-gray-200 pb-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('following')}
+              className={`pb-2.5 px-1 text-base sm:text-lg font-bold transition flex items-center gap-2 cursor-pointer border-b-2 -mb-2.5 ${
+                activeTab === 'following'
+                  ? 'border-[#163B65] text-[#163B65]'
+                  : 'border-transparent text-gray-400 hover:text-gray-800'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${activeTab === 'following' ? 'fill-rose-500 text-rose-500' : ''}`} />
+              <span>Followed Businesses</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-black">
+                {followedBusinesses.length}
+              </span>
+            </button>
 
-          {/* Cards List (Figma Frame 38) */}
-          {followedBusinesses.length > 0 ? (
-            <div className="space-y-6">
-              {followedBusinesses.map((facility) => {
-                const isVerified = facility.verification_status === 'verified';
+            <button
+              type="button"
+              onClick={() => setActiveTab('reviews')}
+              className={`pb-2.5 px-1 text-base sm:text-lg font-bold transition flex items-center gap-2 cursor-pointer border-b-2 -mb-2.5 ${
+                activeTab === 'reviews'
+                  ? 'border-[#163B65] text-[#163B65]'
+                  : 'border-transparent text-gray-400 hover:text-gray-800'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>My Reviews</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 font-black">
+                {reviewsCount}
+              </span>
+            </button>
+          </div>
 
-                return (
-                  <div
-                    key={facility.id}
-                    className="bg-white rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.15)] border border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between overflow-hidden transition hover:shadow-md"
-                  >
-                    {/* Facility Image (Figma Frame 28 - Node 343:1758) */}
-                    <div className="w-full sm:w-85.75 h-47 shrink-0 bg-gray-100 overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={facility.photo}
-                        alt={facility.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+          {/* TAB 1: FOLLOWED BUSINESSES */}
+          {activeTab === 'following' && (
+            <div>
+              {followedBusinesses.length > 0 ? (
+                <div className="space-y-4">
+                  {followedBusinesses.map((facility) => {
+                    const isVerified = facility.verification_status === 'verified';
 
-                    {/* Facility Details (Figma Node 343:1760 - Frame 26) */}
-                    <div className="p-4 sm:p-5 flex-1 space-y-2.5">
-                      {/* Facility Title */}
-                      <Link
-                        href={`/facility/${facility.id}`}
-                        className="text-lg font-semibold text-black hover:text-[#163B65] transition line-clamp-1"
+                    return (
+                      <div
+                        key={facility.id}
+                        className="bg-white rounded-2xl shadow-xs border border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between overflow-hidden transition hover:shadow-md p-4 sm:p-5 gap-4"
                       >
-                        {facility.name}
-                      </Link>
+                        {/* Facility Details */}
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 text-[#163B65] font-black flex items-center justify-center shrink-0 text-xl shadow-2xs">
+                            {facility.name.charAt(0).toUpperCase()}
+                          </div>
 
-                      {/* Rating & Verified Pill (Figma Node 343:1763 - Frame 21) */}
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <div className="flex items-center gap-1.5 text-base font-medium text-black">
-                          <Star className="w-5 h-5 fill-[#FFCD0F] text-[#FFCD0F]" />
-                          {facility.rating ? (
-                            <>
-                              <span>{facility.rating.toFixed(1)}</span>
-                              <span className="text-black font-medium">
-                                ({facility.review_count} reviews)
-                              </span>
-                            </>
+                          <div className="space-y-1.5 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Link
+                                href={`/facility/${facility.id}`}
+                                className="text-base sm:text-lg font-bold text-gray-900 hover:text-[#163B65] transition line-clamp-1"
+                              >
+                                {facility.name}
+                              </Link>
+                              {isVerified && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Verified</span>
+                                </span>
+                              )}
+                              {facility.categoryName && (
+                                <span className="text-xs px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 font-medium">
+                                  {facility.categoryName}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Rating */}
+                            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                              {facility.rating ? (
+                                <>
+                                  <span className="font-bold text-gray-900">{facility.rating.toFixed(1)}</span>
+                                  <span>({facility.review_count} {facility.review_count === 1 ? 'review' : 'reviews'})</span>
+                                </>
+                              ) : (
+                                <span className="text-gray-400">No ratings yet</span>
+                              )}
+                            </div>
+
+                            {/* Location */}
+                            {(facility.town || facility.county) && (
+                              <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                                <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span>
+                                  {facility.town ? `${facility.town}, ` : ''}
+                                  {facility.county || 'Liberia'}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Phone & Website */}
+                            <div className="flex items-center gap-4 text-xs text-gray-600 flex-wrap pt-0.5">
+                              {facility.phone && (
+                                <a
+                                  href={`tel:${facility.phone}`}
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  <span>{facility.phone}</span>
+                                </a>
+                              )}
+                              {facility.website_url && (
+                                <a
+                                  href={facility.website_url.startsWith('http') ? facility.website_url : `https://${facility.website_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                >
+                                  <Globe className="w-3 h-3" />
+                                  <span>Website</span>
+                                  <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Unfollow Button */}
+                        <div className="sm:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleUnfollow(facility.id)}
+                            className="w-full sm:w-auto px-4 py-2 border border-gray-300 text-gray-700 font-semibold text-xs rounded-xl hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                          >
+                            <span>Unfollow</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Empty State */
+                <div className="rounded-2xl border border-dashed border-gray-300 p-10 sm:p-14 text-center space-y-4 bg-gray-50/60">
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-[#163B65] flex items-center justify-center mx-auto shadow-2xs">
+                    <Heart className="w-7 h-7 text-[#163B65]" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900">No followed businesses yet</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
+                      Explore healthcare clinics, hospitals, and pharmacies across Liberia and follow them for quick
+                      access directly from your profile.
+                    </p>
+                  </div>
+                  <Link
+                    href="/home"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#163B65] text-white text-xs sm:text-sm font-bold rounded-xl hover:bg-[#0f2845] transition shadow-xs"
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Browse Health Facilities</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: MY REVIEWS */}
+          {activeTab === 'reviews' && (
+            <div>
+              {userReviews.length > 0 ? (
+                <div className="space-y-3">
+                  {userReviews.map((rev) => (
+                    <div
+                      key={rev.id}
+                      className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-2xs space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {rev.businesses ? (
+                            <Link
+                              href={`/facility/${rev.businesses.id}`}
+                              className="text-sm sm:text-base font-bold text-[#163B65] hover:underline flex items-center gap-1.5"
+                            >
+                              <span>{rev.businesses.name}</span>
+                              <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
+                            </Link>
                           ) : (
-                            <span className="text-sm text-gray-500 font-normal">
-                              No reviews yet
+                            <span className="text-sm font-bold text-gray-700">Healthcare Facility</span>
+                          )}
+
+                          {rev.businesses?.category?.name && (
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-semibold">
+                              {rev.businesses.category.name}
+                            </span>
+                          )}
+
+                          {rev.is_anonymous && (
+                            <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                              Anonymous
                             </span>
                           )}
                         </div>
 
-                        {/* Verified Badge (Figma Node 343:1769 - Frame 20) */}
-                        {isVerified && (
-                          <div className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full bg-[#22C55E] text-white text-sm font-semibold">
-                            <CheckCircle2 className="w-3.5 h-3.5 fill-white text-[#22C55E]" />
-                            <span>Verified</span>
-                          </div>
+                        <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-gray-400">
+                          <span>
+                            {new Date(rev.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReview(rev.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="Delete this review"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Stars & Comment */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-4 h-4 ${
+                                i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        {rev.comment && (
+                          <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
+                            {rev.comment}
+                          </p>
                         )}
                       </div>
-
-                      {/* Location (Figma Node 343:1774 - Frame 22) */}
-                      <div className="flex items-center gap-2 text-base font-medium text-black">
-                        <MapPin className="w-5 h-5 text-black shrink-0" />
-                        <span className="truncate">
-                          {facility.town ? `${facility.town}, ` : ''}
-                          {facility.county}
-                        </span>
-                      </div>
-
-                      {/* Phone (Figma Node 343:1780 - Frame 23) */}
-                      <div className="flex items-center gap-2 text-base font-normal text-black">
-                        <Phone className="w-4 h-4 text-black shrink-0" />
-                        <a
-                          href={`tel:${facility.phone}`}
-                          className="hover:text-[#163B65] transition"
-                        >
-                          {facility.phone}
-                        </a>
-                      </div>
-
-                      {/* Website (Figma Node 343:1784 - Frame 24) */}
-                      <div className="flex items-center gap-2 text-base font-medium text-black">
-                        <Globe className="w-5 h-5 text-black shrink-0" />
-                        <a
-                          href={`https://${facility.website_url.replace(/^https?:\/\//, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-[#163B65] truncate transition"
-                        >
-                          {facility.website_url}
-                        </a>
-                      </div>
                     </div>
-
-                    {/* Unfollow Button (Figma Node 343:1789) */}
-                    <div className="p-4 sm:p-5 flex sm:self-center shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleUnfollow(facility.id)}
-                        className="w-full sm:w-37.5 h-11 border-[1.5px] border-[#163B65] text-[#163B65] font-bold text-base rounded-lg hover:bg-red-50 hover:border-red-600 hover:text-red-600 transition flex items-center justify-center cursor-pointer shadow-xs"
-                      >
-                        <span>Unfollow</span>
-                      </button>
-                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* Empty Reviews */
+                <div className="rounded-2xl border border-dashed border-gray-300 p-10 sm:p-14 text-center space-y-4 bg-gray-50/60">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
+                    <Star className="w-7 h-7 fill-amber-400 text-amber-400" />
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* Empty State */
-            <div className="rounded-xl border border-dashed border-gray-300 p-12 text-center space-y-4 bg-gray-50/50">
-              <div className="w-14 h-14 rounded-full bg-blue-50 text-[#163B65] flex items-center justify-center mx-auto">
-                <Heart className="w-7 h-7 text-[#163B65]" />
-              </div>
-              <h3 className="text-xl font-bold text-black">No followed businesses yet</h3>
-              <p className="text-sm text-gray-600 max-w-md mx-auto">
-                Explore health facilities and pharmacies across Liberia and follow them for quick
-                access directly from your profile.
-              </p>
-              <Link
-                href="/search"
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#163B65] text-white text-sm font-semibold rounded-lg hover:bg-[#0f2845] transition shadow-xs"
-              >
-                <span>Browse Health Facilities</span>
-              </Link>
+                  <div className="space-y-1">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900">No reviews submitted yet</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
+                      Share your experience with clinics and hospitals across Liberia to help the community make
+                      informed healthcare choices.
+                    </p>
+                  </div>
+                  <Link
+                    href="/home"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#163B65] text-white text-xs sm:text-sm font-bold rounded-xl hover:bg-[#0f2845] transition shadow-xs"
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span>Find Facilities to Review</span>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -666,7 +903,7 @@ export default function UserProfilePage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                    Avatar Image URL
+                    Avatar Image URL (Optional)
                   </label>
                   <input
                     type="url"
