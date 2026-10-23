@@ -65,7 +65,7 @@ export const Header: React.FC = () => {
     { label: 'Home', href: user ? '/home' : '/' },
     { label: 'Health Facilities', href: '/search' },
     { label: 'Add Business', href: '/auth/business' },
-    { label: 'Write a Review', href: '/search?action=review' },
+    // { label: 'Write a Review', href: '/search?action=review' },
     ...(userRole === 'admin' ? [{ label: 'Admin', href: '/admin' }] : []),
     ...(userRole === 'business_owner' || userRole === 'business'
       ? [{ label: 'Dashboard', href: '/dashboard' }]

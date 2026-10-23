@@ -144,7 +144,7 @@ export default function AuthenticatedLandingPage() {
             ),
             reviews(rating)
           `)
-          .limit(4);
+          .limit(12);
 
         if (error) {
           console.warn('Error fetching facilities, using Figma fallbacks:', error.message);
@@ -459,10 +459,10 @@ export default function AuthenticatedLandingPage() {
           </Link>
         </div>
 
-        {/* 2x2 Grid of Cards */}
+        {/* 2-column Grid of Cards */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
-            {[1, 2, 3, 4].map((n) => (
+            {[1, 2, 3, 4, 5, 6].map((n) => (
               <div
                 key={n}
                 className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col animate-pulse"

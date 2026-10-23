@@ -782,7 +782,7 @@ export default function AdminPage() {
                             <button
                               type="button"
                               onClick={() => handleUpdateStatus(fac.id, 'verified')}
-                              className="px-3.5 py-1.5 bg-[#4AB057] hover:bg-[#3ea04a] text-white font-semibold rounded-lg transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                              className="px-3.5 py-1.5 bg-secondary hover:bg-[#3ea04a] text-white font-semibold rounded-lg transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
                               title="Approve and mark as verified"
                             >
                               <Check className="w-3.5 h-3.5" />
@@ -1254,7 +1254,7 @@ export default function AdminPage() {
             >
               {/* Frame 140: Dialog Header */}
               <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-                <h2 className="text-xl sm:text-2xl font-bold text-[#121313]">
+                <h2 className="text-xl sm:text-2xl font-bold text-text">
                   Business Details
                 </h2>
                 <button
@@ -1286,7 +1286,7 @@ export default function AdminPage() {
                   {/* Facility Quick Information (Frame 152) */}
                   <div className="flex-1 space-y-2 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg sm:text-xl font-bold text-[#121313] leading-snug">
+                      <h3 className="text-lg sm:text-xl font-bold text-text leading-snug">
                         {selectedBusiness.name}
                       </h3>
                       {/* Category Pill (Frame 153) */}
@@ -1383,7 +1383,7 @@ export default function AdminPage() {
                       <div className="lg:col-span-8 space-y-6">
                         {/* Section 1: Business Information */}
                         <div className="space-y-3.5">
-                          <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                          <h4 className="text-base sm:text-lg font-bold text-text">
                             Business Information
                           </h4>
 
@@ -1464,7 +1464,7 @@ export default function AdminPage() {
 
                         {/* Section 2: Business Owner Information */}
                         <div className="space-y-3.5 pt-2 border-t border-gray-100">
-                          <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                          <h4 className="text-base sm:text-lg font-bold text-text">
                             Business Owner Information
                           </h4>
 
@@ -1617,7 +1617,7 @@ export default function AdminPage() {
                   /* Documents Tab View */
                   <div className="border border-black/15 rounded-2xl p-5 sm:p-6 bg-white space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                      <h4 className="text-base sm:text-lg font-bold text-text">
                         Accreditation & Legal Documentation
                       </h4>
                       <span className="text-xs text-gray-500 font-medium">

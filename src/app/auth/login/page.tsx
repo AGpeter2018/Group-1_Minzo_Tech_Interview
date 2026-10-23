@@ -28,25 +28,32 @@ function LoginForm() {
   const [resetLoading, setResetLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(() => {
+  const [toastData, setToastData] = useState<{ message: string; type: 'admin' | 'success' } | null>(() => {
     const toastParam = searchParams.get('toast');
     const msgParam = searchParams.get('message');
+    if (toastParam === 'password_updated') {
+      return {
+        message: msgParam || 'Your password has been reset successfully! Please sign in with your new password.',
+        type: 'success',
+      };
+    }
     if (toastParam === 'admin_required' || msgParam) {
-      return (
-        msgParam || 'Please sign in with an administrator account to access the Admin Console.'
-      );
+      return {
+        message: msgParam || 'Please sign in with an administrator account to access the Admin Console.',
+        type: 'admin',
+      };
     }
     return null;
   });
 
   // Auto-dismiss floating toast after 7 seconds
   useEffect(() => {
-    if (!toastMessage) return;
+    if (!toastData) return;
     const timer = setTimeout(() => {
-      setToastMessage(null);
+      setToastData(null);
     }, 7000);
     return () => clearTimeout(timer);
-  }, [toastMessage]);
+  }, [toastData]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +161,7 @@ function LoginForm() {
     setResetLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/login`,
+        redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
       if (error) throw error;
@@ -173,22 +180,36 @@ function LoginForm() {
   return (
     <div className="min-h-screen bg-surface flex flex-col justify-between relative">
       {/* Floating Toast Notification for Admin / Auth alerts */}
-      {toastMessage && (
+      {toastData && (
         <aside
           role="alert"
           aria-live="assertive"
-          className="fixed top-5 right-5 z-50 max-w-sm sm:max-w-md bg-white border border-amber-300 rounded-2xl shadow-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-4 fade-in duration-300"
+          className={`fixed top-5 right-5 z-50 max-w-sm sm:max-w-md bg-white border rounded-2xl shadow-xl p-4 flex items-start gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
+            toastData.type === 'success' ? 'border-emerald-300' : 'border-amber-300'
+          }`}
         >
-          <div className="p-2 bg-amber-50 text-amber-600 rounded-xl shrink-0">
-            <ShieldAlert className="w-5 h-5" />
+          <div
+            className={`p-2 rounded-xl shrink-0 ${
+              toastData.type === 'success'
+                ? 'bg-emerald-50 text-emerald-600'
+                : 'bg-amber-50 text-amber-600'
+            }`}
+          >
+            {toastData.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <ShieldAlert className="w-5 h-5" />
+            )}
           </div>
           <div className="flex-1 pr-1">
-            <h4 className="text-sm font-bold text-gray-900 mb-0.5">Admin Access Required</h4>
-            <p className="text-xs text-gray-600 leading-relaxed">{toastMessage}</p>
+            <h4 className="text-sm font-bold text-gray-900 mb-0.5">
+              {toastData.type === 'success' ? 'Password Reset' : 'Admin Access Required'}
+            </h4>
+            <p className="text-xs text-gray-600 leading-relaxed">{toastData.message}</p>
           </div>
           <button
             type="button"
-            onClick={() => setToastMessage(null)}
+            onClick={() => setToastData(null)}
             className="text-gray-400 hover:text-gray-600 p-1 rounded-lg transition cursor-pointer"
             aria-label="Dismiss toast"
           >
@@ -221,12 +242,24 @@ function LoginForm() {
         </div>
 
         {/* Feedback Alerts */}
-        {toastMessage && (
-          <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 animate-in fade-in">
-            <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+        {toastData && (
+          <div
+            className={`mb-5 p-3.5 border rounded-xl flex items-start gap-2.5 text-xs animate-in fade-in ${
+              toastData.type === 'success'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}
+          >
+            {toastData.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+            ) : (
+              <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+            )}
             <div className="flex-1">
-              <span className="font-bold block mb-0.5">Admin Login Required</span>
-              <span>{toastMessage}</span>
+              <span className="font-bold block mb-0.5">
+                {toastData.type === 'success' ? 'Password Reset Successful' : 'Admin Login Required'}
+              </span>
+              <span>{toastData.message}</span>
             </div>
           </div>
         )}
@@ -289,14 +322,12 @@ function LoginForm() {
 
             {/* Forgot Password Right Aligned */}
             <div className="flex justify-end mt-2">
-              <button
-                type="button"
-                disabled={resetLoading}
-                onClick={handleForgotPassword}
-                className="text-sm font-medium text-text hover:text-[#163B65] transition-colors focus:outline-none"
+              <Link
+                href="/auth/forgot-password"
+                className="text-sm font-medium text-text hover:text-[#163B65] hover:underline transition-colors focus:outline-none"
               >
-                {resetLoading ? 'Sending link...' : 'Forgot Password'}
-              </button>
+                Forgot Password?
+              </Link>
             </div>
           </div>
 
