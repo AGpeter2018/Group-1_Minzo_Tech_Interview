@@ -36,6 +36,35 @@ export default function BusinessOnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [ownerIdState, setOwnerIdState] = useState<string | null>(null);
+
+  // Read URL query parameters and sessionStorage on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qName = urlParams.get("name");
+      const qPhone = urlParams.get("phone");
+      const qEmail = urlParams.get("email");
+      const qCategory = urlParams.get("category");
+      const qOwnerId = urlParams.get("owner_id");
+
+      let prefill: { name?: string; phone?: string; email?: string; category?: string; owner_id?: string } | null = null;
+      const cached = sessionStorage.getItem("minzo_onboarding_prefill");
+      if (cached) {
+        prefill = JSON.parse(cached);
+      }
+
+      if (qName || prefill?.name) setBusinessName(qName || prefill?.name || "");
+      if (qPhone || prefill?.phone) setPhone(qPhone || prefill?.phone || "");
+      if (qEmail || prefill?.email) setEmail(qEmail || prefill?.email || "");
+      if (qCategory || prefill?.category) setCategoryId(qCategory || prefill?.category || "");
+      if (qOwnerId || prefill?.owner_id) setOwnerIdState(qOwnerId || prefill?.owner_id || null);
+    } catch (e) {
+      console.warn("Could not parse onboarding prefill:", e);
+    }
+  }, []);
 
   // Fetch Categories from Supabase
   useEffect(() => {
@@ -126,57 +155,34 @@ export default function BusinessOnboardingPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 2. Generate slug
-      const slug =
-        businessName
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)+/g, "") +
-        "-" +
-        Math.random().toString(36).substring(2, 6);
+      const effectiveOwnerId = user?.id || ownerIdState || null;
 
-      // 3. County coordinates
-      const coords = getCountyCoordinates(city);
-
-      // 4. Insert into businesses table
-      const { data: businessData, error: businessError } = await supabase
-        .from("businesses")
-        .insert({
+      // 2. Call the server onboarding endpoint (runs with privileged service role, avoiding RLS 401 error)
+      const res = await fetch("/api/businesses/onboarding", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           name: businessName.trim(),
-          slug,
           category_id: categoryId,
-          owner_id: user?.id || null,
-          address: address.trim(),
-          county: city,
-          town: address.trim() || city,
           phone: phone.trim(),
           public_email: email.trim(),
+          address: address.trim(),
+          country,
+          city,
+          county: city,
+          town: address.trim() || city,
           website_url: website.trim() || null,
-          latitude: coords?.latitude ?? null,
-          longitude: coords?.longitude ?? null,
-          source: "business_registration",
-          verification_status: "pending",
-          record_status: "pending",
-          is_published: false,
-        })
-        .select()
-        .single();
+          description: description.trim() || null,
+          owner_id: effectiveOwnerId,
+        }),
+      });
 
-      if (businessError) {
-        throw businessError;
-      }
+      const result = await res.json().catch(() => ({}));
 
-      // 5. Store description if provided
-      if (businessData?.id && description.trim()) {
-        try {
-          await supabase.from("healthcare_facility_details").insert({
-            business_id: businessData.id,
-            additional_notes: description.trim(),
-          });
-        } catch (detailErr) {
-          console.warn("Facility detail insert note:", detailErr);
-        }
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Could not submit your business. Please try again.");
       }
 
       setSuccessMessage(
@@ -192,8 +198,8 @@ export default function BusinessOnboardingPage() {
       setDescription("");
 
       setTimeout(() => {
-        router.push("/dashboard");
-      }, 2000);
+        router.push("/signUp/onboarding/success");
+      }, 1500);
     } catch (err: unknown) {
       setErrorMessage(
         err instanceof Error

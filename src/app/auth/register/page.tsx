@@ -351,7 +351,7 @@ export default function RegisterPage() {
               <p className="text-xs text-gray-500">
                 Are you a healthcare facility owner or manager?{' '}
                 <Link
-                  href="/auth/business"
+                  href="/signUp/business"
                   className="font-semibold text-[#163B65] hover:text-secondary underline ml-1"
                 >
                   Register Your Business

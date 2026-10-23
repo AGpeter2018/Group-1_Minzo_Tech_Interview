@@ -64,7 +64,7 @@ export const Header: React.FC = () => {
   const navLinks = [
     { label: 'Home', href: user ? '/home' : '/' },
     { label: 'Health Facilities', href: '/search' },
-    { label: 'Add Business', href: '/auth/business' },
+    { label: 'Add Business', href: '/signUp/business' },
     { label: 'Write a Review', href: '/search?action=review' },
     ...(userRole === 'admin' ? [{ label: 'Admin', href: '/admin' }] : []),
     ...(userRole === 'business_owner' || userRole === 'business'

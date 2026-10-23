@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 
@@ -44,6 +45,7 @@ const BusinessSignUp = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const router = useRouter();
   
   
 
@@ -119,7 +121,7 @@ const BusinessSignUp = () => {
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/signUp/businessSignUp`,
+          emailRedirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/signUp/onboarding`,
           data: {
             role: "business_owner",
             account_type: "business_owner",
@@ -178,20 +180,38 @@ const BusinessSignUp = () => {
         }
       }
 
-      setSuccessMessage(
-        data.session
-          ? "Your business account has been created. Its listing is pending verification."
-          : "Registration received! Please check your email to confirm your account. Your business listing is pending verification.",
-      );
+      // Store onboarding info in sessionStorage for smooth handoff
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem(
+            "minzo_onboarding_prefill",
+            JSON.stringify({
+              name: businessName.trim(),
+              category: categoryId,
+              phone: phone.trim(),
+              email: email.trim(),
+              owner_id: userId || "",
+            })
+          );
+        } catch (e) {
+          console.warn("Could not cache to sessionStorage:", e);
+        }
+      }
 
-      // Reset form fields upon success
-      setCategoryId("");
-      setBusinessName("");
-      setOwnerName("");
-      setPhone("");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
+      setSuccessMessage("Business account registered! Redirecting to facility onboarding...");
+
+      // Prepare URL search parameters
+      const params = new URLSearchParams();
+      if (businessName) params.set("name", businessName.trim());
+      if (categoryId) params.set("category", categoryId);
+      if (phone) params.set("phone", phone.trim());
+      if (email) params.set("email", email.trim());
+      if (userId) params.set("owner_id", userId);
+
+      // Route to facility onboarding
+      setTimeout(() => {
+        router.push(`/signUp/onboarding?${params.toString()}`);
+      }, 1000);
     } catch (error) {
       setErrorMessage(
         error instanceof Error
