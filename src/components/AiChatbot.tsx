@@ -55,22 +55,6 @@ interface Message {
 // Maximum characters a user may send per message (matches server-side guardrail)
 const MAX_QUERY_LENGTH = 500;
 
-// Welcome message — no hardcoded facility data; all responses come from live DB
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'msg-welcome',
-    sender: 'bot',
-    text: "Hello. I am the Minzo AI Concierge. I can help you find hospitals, clinics, pharmacies, and health services across Liberia, all directly from our verified directory. What facility or service are you looking for today?",
-    suggestions: [
-      'Find hospitals in Monrovia',
-      'Show 24/7 emergency facilities',
-      'Find pharmacies in Bomi County',
-      'Which clinics offer maternal care?',
-    ],
-    timestamp: '—',
-  },
-];
-
 function formatCurrentTime(): string {
   const now = new Date();
   let hours = now.getHours();
@@ -82,10 +66,23 @@ function formatCurrentTime(): string {
   return `${hours}:${minutesStr}${ampm}`;
 }
 
+const WELCOME_MESSAGE: Message = {
+  id: 'msg-welcome',
+  sender: 'bot',
+  text: "Hello! Welcome to Minzo Africa. 👋\n\nI'm your AI healthcare assistant. Here is what I can help you do:\n• Find hospitals, clinics, and pharmacies near you\n• Check 24/7 emergency services and operating hours\n• Get facility contact numbers, addresses, and directions across Liberia\n\nHow can I help you today?",
+  suggestions: [
+    'Find hospitals near me',
+    '24/7 Emergency clinics',
+    'Pharmacies in Monrovia',
+    'Clinics in Montserrado',
+  ],
+  timestamp: 'Just now',
+};
+
 export function AiChatbot() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -205,7 +202,7 @@ export function AiChatbot() {
       const errorMsg: Message = {
         id: createUniqueId('bot'),
         sender: 'bot',
-        text: "I'm sorry, I encountered a network error. Please check your connection and try again.",
+        text: "I'm having trouble connecting to the directory right now. Please try your search again in a moment.",
         timestamp: formatCurrentTime(),
       };
       setMessages((prev) => [...prev, errorMsg]);

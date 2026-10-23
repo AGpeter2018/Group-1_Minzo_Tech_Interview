@@ -7,16 +7,12 @@ import {
   Building2,
   MapPin,
   Phone,
-  Mail,
-  Globe,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
   Loader2,
   ArrowRight,
-  Clock,
-  Activity,
-  Plus
+  Activity
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIBERIA_COUNTIES, getCountyCoordinates } from '@/lib/location';
@@ -32,7 +28,6 @@ export default function BusinessRegisterPage() {
 
   // Categories from Supabase
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
 
   // Form State - Facility Details
   const [name, setName] = useState('');
@@ -65,7 +60,7 @@ export default function BusinessRegisterPage() {
   useEffect(() => {
     async function loadCategories() {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('categories')
           .select('id, name, slug')
           .order('name');
@@ -85,8 +80,6 @@ export default function BusinessRegisterPage() {
         }
       } catch (err) {
         console.error('Error fetching categories:', err);
-      } finally {
-        setLoadingCategories(false);
       }
     }
     loadCategories();
@@ -122,14 +115,14 @@ export default function BusinessRegisterPage() {
     setSubmitting(true);
 
     try {
-      // 1. Sign up the user profile as 'business'
+      // 1. Sign up the user profile as 'business_owner'
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: accountEmail.trim(),
         password,
         options: {
           data: {
             full_name: ownerName.trim() || name.trim(),
-            role: 'business',
+            role: 'business_owner',
             phone: phone.trim(),
           },
         },
@@ -145,7 +138,7 @@ export default function BusinessRegisterPage() {
           id: userId,
           full_name: ownerName.trim() || name.trim(),
           phone: phone.trim(),
-          role: 'business',
+          role: 'business_owner',
         });
       }
 
@@ -200,8 +193,12 @@ export default function BusinessRegisterPage() {
       setTimeout(() => {
         router.push('/dashboard');
       }, 1800);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to submit registration. Please try again.');
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : 'Failed to submit registration. Please try again.'
+      );
     } finally {
       setSubmitting(false);
     }

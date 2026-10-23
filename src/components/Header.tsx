@@ -25,10 +25,9 @@ export const Header: React.FC = () => {
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
-          .single();
-        if (profile?.role) {
-          setUserRole(profile.role);
-        }
+          .maybeSingle();
+        const role = profile?.role || session.user.user_metadata?.role || 'user';
+        setUserRole(role);
       }
     };
 
@@ -41,10 +40,9 @@ export const Header: React.FC = () => {
           .from('profiles')
           .select('role')
           .eq('id', session.user.id)
-          .single();
-        if (profile?.role) {
-          setUserRole(profile.role);
-        }
+          .maybeSingle();
+        const role = profile?.role || session.user.user_metadata?.role || 'user';
+        setUserRole(role);
       } else {
         setUserRole('user');
       }
@@ -69,6 +67,9 @@ export const Header: React.FC = () => {
     { label: 'Add Business', href: '/auth/business' },
     { label: 'Write a Review', href: '/search?action=review' },
     ...(userRole === 'admin' ? [{ label: 'Admin', href: '/admin' }] : []),
+    ...(userRole === 'business_owner' || userRole === 'business'
+      ? [{ label: 'Dashboard', href: '/dashboard' }]
+      : []),
   ];
 
   return (
