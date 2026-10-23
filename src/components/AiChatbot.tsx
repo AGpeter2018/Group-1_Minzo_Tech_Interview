@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   MessageSquare,
   Send,
@@ -11,6 +12,7 @@ import {
   ExternalLink,
   Phone,
   Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -50,41 +52,22 @@ interface Message {
   suggestions?: string[];
 }
 
-// Initial conversation matching Figma mockup (Node 355:2035)
+// Maximum characters a user may send per message (matches server-side guardrail)
+const MAX_QUERY_LENGTH = 500;
+
+// Welcome message — no hardcoded facility data; all responses come from live DB
 const INITIAL_MESSAGES: Message[] = [
   {
-    id: 'msg-1',
-    sender: 'user',
-    text: 'Hey, Good morning\nPlease which hospital is close to me?',
-    timestamp: '10:12AM',
-  },
-  {
-    id: 'msg-2',
+    id: 'msg-welcome',
     sender: 'bot',
-    text: 'Here are few hospitals near your location',
-    facilities: [
-      {
-        id: 'bomi-govt-hospital',
-        name: 'Liberia Government Hospital (Tubmanburg)',
-        town: 'Tubmanburg',
-        county: 'Bomi County',
-        phone: '+231886410594',
-      },
-      {
-        id: 'buchanan-govt-hospital',
-        name: 'Liberia Government Hospital (Buchanan)',
-        town: 'Buchanan',
-        county: 'Grand Bassa County',
-        phone: '+231556442566',
-      },
-    ],
-    followUp: 'Would you like directions to one of these hospitals?',
+    text: "Hello. I am the Minzo AI Concierge. I can help you find hospitals, clinics, pharmacies, and health services across Liberia, all directly from our verified directory. What facility or service are you looking for today?",
     suggestions: [
-      'Directions to Tubmanburg Hospital',
+      'Find hospitals in Monrovia',
       'Show 24/7 emergency facilities',
-      'Find pharmacies near me',
+      'Find pharmacies in Bomi County',
+      'Which clinics offer maternal care?',
     ],
-    timestamp: '10:12AM',
+    timestamp: '—',
   },
 ];
 
@@ -100,6 +83,7 @@ function formatCurrentTime(): string {
 }
 
 export function AiChatbot() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [inputValue, setInputValue] = useState('');
@@ -142,6 +126,18 @@ export function AiChatbot() {
     const text = (textToSend || inputValue).trim();
     if (!text || isTyping) return;
 
+    // Guardrail: enforce max input length
+    if (text.length > MAX_QUERY_LENGTH) {
+      const errorMsg: Message = {
+        id: createUniqueId('bot'),
+        sender: 'bot',
+        text: `Message too long. Please keep your question under ${MAX_QUERY_LENGTH} characters.`,
+        timestamp: formatCurrentTime(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+      return;
+    }
+
     const userMsg: Message = {
       id: createUniqueId('user'),
       sender: 'user',
@@ -167,7 +163,7 @@ export function AiChatbot() {
           const { answer, places, suggestions } = result.data;
 
           const matchedFacilities: FacilitySuggestion[] = (places || [])
-            .slice(0, 3)
+            .slice(0, 6)
             .map((p: RawFacility) => ({
               id: p.id,
               name: p.name,
@@ -196,85 +192,23 @@ export function AiChatbot() {
         }
       }
 
-      // 2. Direct fallback to Supabase businesses query if RAG agent API is unconfigured
-      const cleanTerms = text.replace(/[^\w\s]/gi, '').split(/\s+/).filter(Boolean);
-      let dbQuery = supabase.from('businesses').select('*');
-
-      if (cleanTerms.length > 0) {
-        const orClauses = cleanTerms
-          .map((t) => `name.ilike.%${t}%,category.ilike.%${t}%,town.ilike.%${t}%,county.ilike.%${t}%`)
-          .join(',');
-        dbQuery = dbQuery.or(orClauses);
-      }
-
-      const { data: dbPlaces } = await dbQuery.limit(3);
-
-      const facilitiesList: FacilitySuggestion[] =
-        dbPlaces && dbPlaces.length > 0
-          ? dbPlaces.map((b: RawFacility) => ({
-              id: b.id,
-              name: b.name,
-              town: b.town || 'Monrovia',
-              county: b.county || 'Montserrado County',
-              phone: b.phone,
-              website_url: b.website_url,
-            }))
-          : [
-              {
-                id: 'bomi-govt-hospital',
-                name: 'Liberia Government Hospital (Tubmanburg)',
-                town: 'Tubmanburg',
-                county: 'Bomi County',
-                phone: '+231886410594',
-              },
-              {
-                id: 'buchanan-govt-hospital',
-                name: 'Liberia Government Hospital (Buchanan)',
-                town: 'Buchanan',
-                county: 'Grand Bassa County',
-                phone: '+231556442566',
-              },
-            ];
-
-      const botMsg: Message = {
+      // RAG API returned a non-OK status — show a service error, no hardcoded fallback
+      const statusMsg: Message = {
         id: createUniqueId('bot'),
         sender: 'bot',
-        text: `Here are healthcare facilities matching "${text}":`,
-        facilities: facilitiesList,
-        followUp: 'Would you like directions or emergency contact information?',
-        suggestions: [
-          'View facility phone numbers',
-          'Emergency services available',
-          'Search in Montserrado County',
-        ],
+        text: `I'm having trouble reaching the directory right now (status ${response.status}). Please try again in a moment.`,
         timestamp: formatCurrentTime(),
       };
-
-      setMessages((prev) => [...prev, botMsg]);
+      setMessages((prev) => [...prev, statusMsg]);
     } catch (err) {
-      console.warn('Chat error, using fallback response:', err);
-      const fallbackMsg: Message = {
+      console.error('[Chatbot] Request error:', err);
+      const errorMsg: Message = {
         id: createUniqueId('bot'),
         sender: 'bot',
-        text: 'I found these trusted hospitals registered in our Liberia directory:',
-        facilities: [
-          {
-            name: 'Liberia Government Hospital (Tubmanburg)',
-            town: 'Tubmanburg',
-            county: 'Bomi County',
-            phone: '+231886410594',
-          },
-          {
-            name: 'Liberia Government Hospital (Buchanan)',
-            town: 'Buchanan',
-            county: 'Grand Bassa County',
-            phone: '+231556442566',
-          },
-        ],
-        followUp: 'Would you like directions to one of these hospitals?',
+        text: "I'm sorry, I encountered a network error. Please check your connection and try again.",
         timestamp: formatCurrentTime(),
       };
-      setMessages((prev) => [...prev, fallbackMsg]);
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
     }
@@ -373,54 +307,81 @@ export function AiChatbot() {
                   {/* Bot Message Bubble */}
                   <div className="bg-white border border-[#212934] rounded-xl p-4 max-w-[85%] space-y-3.5 shadow-2xs">
                     {/* Main text */}
-                    <p className="text-sm text-[#212934] leading-relaxed font-normal">
+                    <p className="text-sm text-[#212934] leading-relaxed font-normal whitespace-pre-line">
                       {msg.text}
                     </p>
 
                     {/* Facilities List (Figma Node 355:2035) */}
                     {msg.facilities && msg.facilities.length > 0 && (
-                      <div className="space-y-3 pt-1">
-                        {msg.facilities.map((fac, idx) => (
-                          <div
-                            key={idx}
-                            className="bg-gray-50/70 hover:bg-gray-100/80 p-2.5 rounded-lg border border-gray-100 transition-colors"
-                          >
-                            {/* Facility Name (Bold) */}
-                            {fac.id ? (
-                              <Link
-                                href={`/facility/${fac.id}`}
-                                className="font-bold text-sm text-black hover:text-[#163B65] flex items-center gap-1 group"
-                              >
-                                <span>{fac.name}</span>
-                                <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </Link>
-                            ) : (
-                              <h4 className="font-bold text-sm text-black">{fac.name}</h4>
-                            )}
-
-                            {/* Location Pin & County */}
-                            <div className="flex items-center gap-1.5 text-xs text-gray-700 mt-1 font-medium">
-                              <MapPin className="w-3.5 h-3.5 text-black shrink-0" />
-                              <span>
-                                {fac.town ? `${fac.town}, ` : ''}
-                                {fac.county || 'Liberia'}
-                              </span>
-                            </div>
-
-                            {/* Optional Phone / Actions */}
-                            {fac.phone && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1">
-                                <Phone className="w-3 h-3 text-gray-400" />
-                                <a
-                                  href={`tel:${fac.phone}`}
-                                  className="hover:text-[#163B65] transition"
-                                >
-                                  {fac.phone}
-                                </a>
+                      <div className="space-y-2.5 pt-1">
+                        {msg.facilities.map((fac, idx) => {
+                          const facilityHref = fac.id ? `/facility/${fac.id}` : null;
+                          const CardBody = (
+                            <div className="flex flex-col gap-1.5 w-full">
+                              {/* Top row: Name + Clickable View Badge */}
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className="font-bold text-sm text-[#163B65] group-hover:text-blue-700 transition-colors leading-snug">
+                                  {fac.name}
+                                </h4>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#163B65] bg-blue-50 group-hover:bg-blue-100 group-hover:text-blue-800 px-2.5 py-0.5 rounded-full shrink-0 transition-colors">
+                                  <span>View</span>
+                                  <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                                </span>
                               </div>
-                            )}
-                          </div>
-                        ))}
+
+                              {/* Location Pin & County */}
+                              <div className="flex items-center gap-1.5 text-xs text-gray-600 font-medium">
+                                <MapPin className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                                <span>
+                                  {fac.town ? `${fac.town}, ` : ''}
+                                  {fac.county || 'Liberia'}
+                                </span>
+                              </div>
+
+                              {/* Optional Phone / Actions */}
+                              {fac.phone && (
+                                <div className="flex items-center gap-1.5 text-[11px] text-gray-600 pt-0.5">
+                                  <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.location.href = `tel:${fac.phone}`;
+                                    }}
+                                    className="text-gray-700 hover:text-[#163B65] hover:underline cursor-pointer"
+                                    title={`Call ${fac.phone}`}
+                                  >
+                                    {fac.phone}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+
+                          if (facilityHref) {
+                            return (
+                              <Link
+                                key={idx}
+                                href={facilityHref}
+                                onClick={() => setIsOpen(false)}
+                                className="block bg-gray-50/80 hover:bg-blue-50/50 active:bg-blue-100/60 p-3 rounded-xl border border-gray-200/90 hover:border-[#163B65] transition-all cursor-pointer group shadow-2xs"
+                                title={`View ${fac.name} details page`}
+                              >
+                                {CardBody}
+                              </Link>
+                            );
+                          }
+
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-gray-50/70 p-3 rounded-xl border border-gray-100"
+                            >
+                              {CardBody}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -434,16 +395,32 @@ export function AiChatbot() {
                     {/* Quick suggestion prompt buttons */}
                     {msg.suggestions && msg.suggestions.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-1">
-                        {msg.suggestions.map((sug, sIdx) => (
-                          <button
-                            key={sIdx}
-                            type="button"
-                            onClick={() => handleSendMessage(sug)}
-                            className="text-[11px] font-medium text-[#163B65] bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer text-left"
-                          >
-                            {sug}
-                          </button>
-                        ))}
+                        {msg.suggestions.map((sug, sIdx) => {
+                          const matchedFac = (msg.facilities || []).find(
+                            (f) =>
+                              f.id &&
+                              (sug.toLowerCase().includes(f.name.toLowerCase()) ||
+                                f.name.toLowerCase().includes(sug.toLowerCase()))
+                          );
+
+                          return (
+                            <button
+                              key={sIdx}
+                              type="button"
+                              onClick={() => {
+                                if (matchedFac?.id) {
+                                  setIsOpen(false);
+                                  router.push(`/facility/${matchedFac.id}`);
+                                } else {
+                                  handleSendMessage(sug);
+                                }
+                              }}
+                              className="text-[11px] font-medium text-[#163B65] bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-full transition-colors cursor-pointer text-left"
+                            >
+                              {sug}
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
 
