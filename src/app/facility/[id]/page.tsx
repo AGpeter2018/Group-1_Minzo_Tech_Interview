@@ -772,7 +772,7 @@ export default function BusinessProfilePage() {
               />
 
               {/* Map Footer Overlay with Open Link */}
-              <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur-xs px-3 py-1.5 rounded-lg shadow-md text-xs font-bold text-[#163B65] flex items-center gap-1.5 hover:bg-white transition border border-gray-200">
+              {/* <div className="absolute bottom-2 right-2 bg-white/95 backdrop-blur-xs px-3 py-1.5 rounded-lg shadow-md text-xs font-bold text-[#163B65] flex items-center gap-1.5 hover:bg-white transition border border-gray-200">
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${facLat},${facLng}`}
                   target="_blank"
@@ -783,7 +783,7 @@ export default function BusinessProfilePage() {
                   <span>Get Directions</span>
                   <ExternalLink className="w-3 h-3 text-gray-400" />
                 </a>
-              </div>
+              </div> */}
             </div>
           </div>
         </section>
@@ -1020,7 +1020,7 @@ export default function BusinessProfilePage() {
                   </label>
                   <input
                     type="text"
-                    disabled={isAnonymousInput}
+                    disabled
                     value={isAnonymousInput ? 'Anonymous Patient' : reviewerNameInput}
                     onChange={(e) => setReviewerNameInput(e.target.value)}
                     placeholder="e.g. Andrew John"
