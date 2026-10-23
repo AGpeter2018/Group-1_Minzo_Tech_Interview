@@ -26,6 +26,8 @@ import {
   Globe,
   Stethoscope,
   FileText,
+  Calendar,
+  User as UserIcon,
 } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -136,13 +138,33 @@ function formatRelativeTime(dateStr?: string) {
   return `${diffMonths}mo ago`;
 }
 
+export interface SystemUser {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  avatar_url: string | null;
+  role: 'user' | 'business_owner' | 'admin';
+  email_verified: boolean;
+  businesses_count: number;
+  reviews_count: number;
+  created_at: string;
+  last_sign_in_at: string | null;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'verifications' | 'directory' | 'reviews'>('verifications');
+  const [activeTab, setActiveTab] = useState<'verifications' | 'directory' | 'users' | 'reviews'>('verifications');
+
+  // System Users Directory state
+  const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
+  const [usersSearchTerm, setUsersSearchTerm] = useState('');
+  const [usersFilterRole, setUsersFilterRole] = useState('all');
+  const [updatingUserRole, setUpdatingUserRole] = useState<string | null>(null);
 
   // Admin session state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -159,6 +181,7 @@ export default function AdminPage() {
 
   // Business Details Dialog State
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
+  const [dialogTab, setDialogTab] = useState<'overview' | 'documents'>('overview');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Close modal on Escape key press
@@ -210,14 +233,16 @@ export default function AdminPage() {
         setIsAdmin(true);
         setAdminProfile(prof || null);
 
-        // 2. Fetch businesses with clinical specifications and owner profile
+        // 2. Fetch businesses with clinical specifications, owner profile, photos & documents
         const { data: bData } = await supabase
           .from('businesses')
           .select(`
             *,
             category:categories(*),
             healthcare_facility_details(*),
-            owner:profiles!businesses_owner_id_fkey(*)
+            owner:profiles!businesses_owner_id_fkey(*),
+            business_photos(*),
+            business_documents(*)
           `)
           .order('created_at', { ascending: false });
 
@@ -243,14 +268,36 @@ export default function AdminPage() {
         if (!isActive) return;
         setReviews((rData as Review[]) || []);
 
-        // 4. Fetch total users count (designer's metric)
-        const { count: uCount } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
+        // 4. Fetch system users directory live
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (token) {
+          try {
+            const uRes = await fetch('/api/admin/users', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (uRes.ok) {
+              const uJson = await uRes.json();
+              if (uJson.success && Array.isArray(uJson.data)) {
+                if (!isActive) return;
+                setSystemUsers(uJson.data);
+                setTotalUsers(uJson.data.length);
+              }
+            }
+          } catch (uErr) {
+            console.warn('Users directory fetch notice:', uErr);
+          }
+        }
 
-        if (!isActive) return;
-        if (typeof uCount === 'number') {
-          setTotalUsers(uCount);
+        if (totalUsers === null) {
+          const { count: uCount } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true });
+
+          if (!isActive) return;
+          if (typeof uCount === 'number') {
+            setTotalUsers(uCount);
+          }
         }
 
         setLoading(false);
@@ -359,6 +406,39 @@ export default function AdminPage() {
     }
   };
 
+  // Change user role
+  const handleUpdateUserRole = async (
+    userId: string,
+    newRole: 'user' | 'business_owner' | 'admin'
+  ) => {
+    setUpdatingUserRole(userId);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, role: newRole }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Failed to update user role');
+
+      setSystemUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+      );
+      setActionMessage(`User role successfully changed to ${newRole.toUpperCase()}.`);
+      setTimeout(() => setActionMessage(null), 3500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error updating user role';
+      alert(msg);
+    } finally {
+      setUpdatingUserRole(null);
+    }
+  };
+
   // Metrics
   const totalCount = businesses.length;
   const verifiedCount = businesses.filter((b) => b.verification_status === 'verified').length;
@@ -379,6 +459,20 @@ export default function AdminPage() {
   });
 
   const pendingList = businesses.filter((b) => b.verification_status === 'pending');
+
+  const filteredUsers = systemUsers.filter((u) => {
+    if (usersSearchTerm.trim()) {
+      const q = usersSearchTerm.toLowerCase();
+      const matchName = u.full_name.toLowerCase().includes(q);
+      const matchEmail = u.email.toLowerCase().includes(q);
+      const matchPhone = u.phone?.toLowerCase().includes(q) ?? false;
+      if (!matchName && !matchEmail && !matchPhone) return false;
+    }
+    if (usersFilterRole !== 'all') {
+      if (u.role !== usersFilterRole) return false;
+    }
+    return true;
+  });
 
   if (loading || !isAdmin) {
     return <AdminSkeleton />;
@@ -452,10 +546,18 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Overview Stats Cards - Enhanced with Designer's metrics & icon badges */}
+        {/* Overview Stats Cards - Clickable to quickly jump to tabs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {/* Card 1: Total Facilities */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setActiveTab('directory')}
+            className={`p-5 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+              activeTab === 'directory'
+                ? 'bg-blue-50/50 border-[#163B65] shadow-xs'
+                : 'bg-white border-gray-100 hover:border-gray-300 shadow-2xs'
+            }`}
+          >
             <div>
               <span className="text-xs text-gray-500 font-semibold block">Total Businesses</span>
               <span className="text-2xl font-black text-[#163B65] mt-1 block">{totalCount}</span>
@@ -466,10 +568,18 @@ export default function AdminPage() {
             <div className="w-11 h-11 rounded-xl bg-[#DBEAFE] text-[#1D4ED8] flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
-          </div>
+          </button>
 
           {/* Card 2: Total Registered Users (Figma Card 2) */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setActiveTab('users')}
+            className={`p-5 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+              activeTab === 'users'
+                ? 'bg-blue-50/50 border-[#163B65] shadow-xs'
+                : 'bg-white border-gray-100 hover:border-gray-300 shadow-2xs'
+            }`}
+          >
             <div>
               <span className="text-xs text-gray-500 font-semibold block">Total Users</span>
               <span className="text-2xl font-black text-[#163B65] mt-1 block">
@@ -480,10 +590,18 @@ export default function AdminPage() {
             <div className="w-11 h-11 rounded-xl bg-[#DBEAFE] text-[#1D4ED8] flex items-center justify-center shrink-0">
               <Users className="w-5 h-5" />
             </div>
-          </div>
+          </button>
 
           {/* Card 3: Pending Approval (Figma Card 3) */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setActiveTab('verifications')}
+            className={`p-5 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+              activeTab === 'verifications'
+                ? 'bg-amber-50/50 border-amber-500 shadow-xs'
+                : 'bg-white border-gray-100 hover:border-gray-300 shadow-2xs'
+            }`}
+          >
             <div>
               <span className="text-xs text-gray-500 font-semibold block">Pending Approval</span>
               <span className="text-2xl font-black text-amber-500 mt-1 block">{pendingCount}</span>
@@ -492,10 +610,18 @@ export default function AdminPage() {
             <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center shrink-0">
               <Clock className="w-5 h-5" />
             </div>
-          </div>
+          </button>
 
           {/* Card 4: Patient Reviews */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-2xs flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setActiveTab('reviews')}
+            className={`p-5 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+              activeTab === 'reviews'
+                ? 'bg-purple-50/50 border-purple-500 shadow-xs'
+                : 'bg-white border-gray-100 hover:border-gray-300 shadow-2xs'
+            }`}
+          >
             <div>
               <span className="text-xs text-gray-500 font-semibold block">Patient Reviews</span>
               <span className="text-2xl font-black text-[#163B65] mt-1 block">{reviews.length}</span>
@@ -504,11 +630,11 @@ export default function AdminPage() {
             <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center shrink-0">
               <Star className="w-5 h-5" />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Admin Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-gray-200 mb-6 pb-1">
+        <div className="flex items-center gap-2 border-b border-gray-200 mb-6 pb-1 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveTab('verifications')}
@@ -538,6 +664,19 @@ export default function AdminPage() {
           >
             <Building2 className="w-4 h-4" />
             <span>All Facilities ({businesses.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition cursor-pointer flex items-center gap-2 ${
+              activeTab === 'users'
+                ? 'bg-[#163B65] text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 bg-white border border-gray-200'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Users Directory ({systemUsers.length})</span>
           </button>
 
           <button
@@ -598,7 +737,10 @@ export default function AdminPage() {
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => setSelectedBusiness(fac)}
+                              onClick={() => {
+                                setSelectedBusiness(fac);
+                                setDialogTab('overview');
+                              }}
                               className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-[#163B65] font-black flex items-center justify-center shrink-0 text-xs hover:bg-blue-100 transition cursor-pointer"
                               title="Click to view details"
                             >
@@ -607,7 +749,10 @@ export default function AdminPage() {
                             <div className="text-left">
                               <button
                                 type="button"
-                                onClick={() => setSelectedBusiness(fac)}
+                                onClick={() => {
+                                  setSelectedBusiness(fac);
+                                  setDialogTab('overview');
+                                }}
                                 className="font-bold text-gray-900 hover:text-[#163B65] hover:underline flex items-center gap-1.5 text-left cursor-pointer group"
                                 title="Click to view all facility details"
                               >
@@ -719,7 +864,10 @@ export default function AdminPage() {
                         <div className="flex items-center gap-2.5">
                           <button
                             type="button"
-                            onClick={() => setSelectedBusiness(fac)}
+                            onClick={() => {
+                              setSelectedBusiness(fac);
+                              setDialogTab('overview');
+                            }}
                             className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-xs hover:bg-gray-200 transition cursor-pointer"
                             title="Click to view details"
                           >
@@ -727,7 +875,10 @@ export default function AdminPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSelectedBusiness(fac)}
+                            onClick={() => {
+                              setSelectedBusiness(fac);
+                              setDialogTab('overview');
+                            }}
                             className="font-bold text-gray-900 hover:text-[#163B65] hover:underline flex items-center gap-1.5 text-left cursor-pointer group"
                             title="Click to view all facility details"
                           >
@@ -777,7 +928,214 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Tab 3: Review Moderation */}
+        {/* Tab 3: System Users Directory */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-bold text-[#163B65]">System Users Directory</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Manage all {systemUsers.length} registered accounts across the platform (patients, owners, and administrators).
+                </p>
+              </div>
+
+              {/* Search & Role Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    value={usersSearchTerm}
+                    onChange={(e) => setUsersSearchTerm(e.target.value)}
+                    placeholder="Search name, email, phone..."
+                    className="pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] text-gray-800"
+                  />
+                </div>
+                <select
+                  value={usersFilterRole}
+                  onChange={(e) => setUsersFilterRole(e.target.value)}
+                  className="py-1.5 px-3 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#163B65] text-gray-700 font-semibold"
+                >
+                  <option value="all">All Roles ({systemUsers.length})</option>
+                  <option value="user">
+                    General Users ({systemUsers.filter((u) => u.role === 'user').length})
+                  </option>
+                  <option value="business_owner">
+                    Business Owners ({systemUsers.filter((u) => u.role === 'business_owner').length})
+                  </option>
+                  <option value="admin">
+                    Administrators ({systemUsers.filter((u) => u.role === 'admin').length})
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-[#163B65]" />
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="py-12 text-center text-gray-400">
+                <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-gray-700">No users match your filter criteria.</p>
+                <p className="text-xs text-gray-400 mt-1">Try clearing your search term or selecting &quot;All Roles&quot;.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-gray-400 font-semibold uppercase tracking-wider">
+                      <th className="py-3 px-3">User</th>
+                      <th className="py-3 px-3">Role</th>
+                      <th className="py-3 px-3">Phone</th>
+                      <th className="py-3 px-3">Activity</th>
+                      <th className="py-3 px-3">Joined</th>
+                      <th className="py-3 px-3">Last Active</th>
+                      <th className="py-3 px-3 text-right">Role Management</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredUsers.map((u) => {
+                      const isCurrentUser = u.id === currentUser?.id;
+                      const isUpdating = updatingUserRole === u.id;
+
+                      return (
+                        <tr key={u.id} className="hover:bg-gray-50/50 transition">
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-3">
+                              {u.avatar_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={u.avatar_url}
+                                  alt={u.full_name}
+                                  className="w-9 h-9 rounded-xl object-cover shrink-0 border border-gray-100 shadow-2xs"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#163B65] font-black flex items-center justify-center shrink-0 text-xs shadow-2xs">
+                                  {u.full_name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-gray-900">{u.full_name}</span>
+                                  {isCurrentUser && (
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-blue-100 text-blue-800 font-bold">
+                                      You
+                                    </span>
+                                  )}
+                                  {u.email_verified && (
+                                    <span title="Email confirmed">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[11px] text-gray-400 block font-mono">
+                                  {u.email}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-3">
+                            {u.role === 'admin' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                <ShieldCheck className="w-3 h-3 text-purple-600" />
+                                <span>Administrator</span>
+                              </span>
+                            ) : u.role === 'business_owner' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <Building2 className="w-3 h-3 text-blue-600" />
+                                <span>Business Owner</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-700">
+                                <span>General User</span>
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-3 text-gray-600 font-mono">
+                            {u.phone || 'N/A'}
+                          </td>
+
+                          <td className="py-3.5 px-3">
+                            <div className="space-y-0.5">
+                              {u.businesses_count > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mr-1">
+                                  <Building2 className="w-3 h-3" />
+                                  <span>
+                                    {u.businesses_count} {u.businesses_count === 1 ? 'facility' : 'facilities'}
+                                  </span>
+                                </span>
+                              )}
+                              {u.reviews_count > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                  <span>
+                                    {u.reviews_count} {u.reviews_count === 1 ? 'review' : 'reviews'}
+                                  </span>
+                                </span>
+                              )}
+                              {u.businesses_count === 0 && u.reviews_count === 0 && (
+                                <span className="text-[11px] text-gray-400">Standard Member</span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-3 text-gray-600 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              {new Date(u.created_at).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-3 text-gray-500 whitespace-nowrap text-[11px]">
+                            {u.last_sign_in_at ? formatRelativeTime(u.last_sign_in_at) : 'Never signed in'}
+                          </td>
+
+                          <td className="py-3.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {isUpdating ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-[#163B65]" />
+                              ) : (
+                                <select
+                                  value={u.role}
+                                  disabled={isCurrentUser}
+                                  onChange={(e) =>
+                                    handleUpdateUserRole(
+                                      u.id,
+                                      e.target.value as 'user' | 'business_owner' | 'admin'
+                                    )
+                                  }
+                                  className="text-[11px] font-semibold bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-gray-700 hover:border-gray-400 focus:outline-none focus:border-[#163B65] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={
+                                    isCurrentUser
+                                      ? 'Cannot modify your own administrator role'
+                                      : 'Change user role'
+                                  }
+                                >
+                                  <option value="user">User</option>
+                                  <option value="business_owner">Business Owner</option>
+                                  <option value="admin">Admin</option>
+                                </select>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 4: Review Moderation */}
         {activeTab === 'reviews' && (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-100 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
@@ -869,352 +1227,554 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Business Details Modal Dialog */}
-      {selectedBusiness && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200"
-          onClick={() => setSelectedBusiness(null)}
-        >
+      {/* Business Details Modal Dialog (Matching Figma Node 511:1172) */}
+      {selectedBusiness && (() => {
+        const details = Array.isArray(selectedBusiness.healthcare_facility_details)
+          ? selectedBusiness.healthcare_facility_details[0]
+          : selectedBusiness.healthcare_facility_details;
+
+        const owner = Array.isArray(selectedBusiness.owner)
+          ? selectedBusiness.owner[0]
+          : selectedBusiness.owner;
+
+        const photoUrl =
+          selectedBusiness.business_photos?.[0]?.storage_path ||
+          'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80';
+
+        const documents = selectedBusiness.business_documents || [];
+
+        return (
           <div
-            className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200"
+            onClick={() => setSelectedBusiness(null)}
           >
-            {/* Dialog Header */}
-            <div className="p-5 sm:p-6 border-b border-gray-100 bg-[#F8FAFC] flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#163B65] text-white font-black flex items-center justify-center text-lg sm:text-xl shrink-0 shadow-xs">
-                  {selectedBusiness.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full">
-                      {selectedBusiness.category?.name || 'Healthcare Facility'}
-                    </span>
-                    <VerificationBadge status={selectedBusiness.verification_status} />
-                    <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        selectedBusiness.is_published
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {selectedBusiness.is_published ? 'Published' : 'Unpublished'}
-                    </span>
-                  </div>
-                  <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-                    {selectedBusiness.name}
-                  </h2>
-                  <p className="text-[11px] text-gray-500 font-mono">
-                    Slug: /{selectedBusiness.slug}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedBusiness(null)}
-                className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 transition cursor-pointer shrink-0"
-                title="Close dialog"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Dialog Scrollable Content */}
-            <div className="p-5 sm:p-6 overflow-y-auto space-y-5 text-xs sm:text-sm">
-              {/* Section 1: Location & Contact */}
-              <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
-                <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Location & Contact Details</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-gray-400 block font-medium">County & Town</span>
-                    <span className="font-bold text-gray-800">
-                      {selectedBusiness.town ? `${selectedBusiness.town}, ` : ''}
-                      {selectedBusiness.county || 'County not specified'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-400 block font-medium">Physical Street Address</span>
-                    <span className="font-bold text-gray-800">
-                      {selectedBusiness.address || 'No street address provided'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-400 block font-medium">Official Phone</span>
-                    {selectedBusiness.phone ? (
-                      <a
-                        href={`tel:${selectedBusiness.phone}`}
-                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                        <Phone className="w-3 h-3" />
-                        <span>{selectedBusiness.phone}</span>
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 font-medium">None provided</span>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="text-gray-400 block font-medium">Public Email</span>
-                    {selectedBusiness.public_email ? (
-                      <a
-                        href={`mailto:${selectedBusiness.public_email}`}
-                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                        <Mail className="w-3 h-3" />
-                        <span>{selectedBusiness.public_email}</span>
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 font-medium">None provided</span>
-                    )}
-                  </div>
-
-                  {selectedBusiness.website_url && (
-                    <div className="sm:col-span-2">
-                      <span className="text-gray-400 block font-medium">Website</span>
-                      <a
-                        href={
-                          selectedBusiness.website_url.startsWith('http')
-                            ? selectedBusiness.website_url
-                            : `https://${selectedBusiness.website_url}`
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-bold text-blue-600 hover:underline flex items-center gap-1"
-                      >
-                        <Globe className="w-3 h-3" />
-                        <span>{selectedBusiness.website_url}</span>
-                        <ExternalLink className="w-3 h-3 text-gray-400" />
-                      </a>
-                    </div>
-                  )}
-
-                  {selectedBusiness.latitude !== null &&
-                    selectedBusiness.latitude !== undefined &&
-                    selectedBusiness.longitude !== null &&
-                    selectedBusiness.longitude !== undefined && (
-                      <div className="sm:col-span-2 bg-white p-2.5 rounded-xl border border-gray-100 flex items-center justify-between">
-                        <div>
-                          <span className="text-gray-400 block font-medium text-[11px]">GPS Coordinates</span>
-                          <span className="font-mono text-gray-700 font-semibold text-xs">
-                            {selectedBusiness.latitude.toFixed(5)}, {selectedBusiness.longitude.toFixed(5)}
-                          </span>
-                        </div>
-                        <a
-                          href={`https://maps.google.com/?q=${selectedBusiness.latitude},${selectedBusiness.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                        >
-                          View on Google Maps &rarr;
-                        </a>
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              {/* Section 2: Healthcare Specifications */}
-              {(() => {
-                const details = Array.isArray(selectedBusiness.healthcare_facility_details)
-                  ? selectedBusiness.healthcare_facility_details[0]
-                  : selectedBusiness.healthcare_facility_details;
-
-                return (
-                  <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
-                    <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
-                      <Stethoscope className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Healthcare Facility Specifications</span>
-                    </h3>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="text-gray-400 block font-medium">Facility Level / Type</span>
-                        <span className="font-bold text-gray-800">
-                          {details?.facility_type || selectedBusiness.category?.name || 'Healthcare Facility'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Registration / License #</span>
-                        <span className="font-mono font-bold text-gray-800">
-                          {details?.registration_number || 'Not registered / Pending license'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Opening Hours</span>
-                        <span className="font-bold text-gray-800">
-                          {details?.opening_hours_raw ||
-                            (typeof details?.opening_hours === 'string'
-                              ? details?.opening_hours
-                              : 'Standard clinic hours')}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Emergency Services</span>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] ${
-                            details?.emergency_services
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {details?.emergency_services
-                            ? '24/7 Emergency Care'
-                            : 'Standard Routine Hours'}
-                        </span>
-                      </div>
-
-                      {details?.services && details.services.length > 0 && (
-                        <div className="sm:col-span-2 space-y-1.5 pt-1">
-                          <span className="text-gray-400 block font-medium">Medical Services Provided</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {details.services.map((svc, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-800 text-[11px] font-semibold shadow-2xs"
-                              >
-                                {svc}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {details?.additional_notes && (
-                        <div className="sm:col-span-2 pt-1">
-                          <span className="text-gray-400 block font-medium">Additional Facility Notes</span>
-                          <p className="p-3 bg-white rounded-xl border border-gray-100 text-gray-700 text-xs italic">
-                            &quot;{details.additional_notes}&quot;
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Section 3: Ownership & Registration Audit */}
-              <div className="bg-gray-50/70 p-4.5 rounded-2xl border border-gray-100 space-y-3">
-                <h3 className="font-bold text-[#163B65] text-xs uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Ownership & Registration Audit</span>
-                </h3>
-
-                {(() => {
-                  const owner = Array.isArray(selectedBusiness.owner)
-                    ? selectedBusiness.owner[0]
-                    : selectedBusiness.owner;
-
-                  return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="text-gray-400 block font-medium">Registered Owner</span>
-                        <span className="font-bold text-gray-800">
-                          {owner?.full_name || 'Self / System Administrator'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Owner Phone</span>
-                        <span className="font-mono text-gray-700">
-                          {owner?.phone || 'Not available'}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Data Source</span>
-                        <span className="font-semibold text-gray-700 capitalize">
-                          {selectedBusiness.source.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-gray-400 block font-medium">Submission Date</span>
-                        <span className="font-mono text-gray-700">
-                          {formatSubmissionDate(selectedBusiness.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Dialog Footer Actions */}
-            <div className="p-4 sm:p-5 border-t border-gray-100 bg-[#F8FAFC] flex flex-col sm:flex-row items-center justify-between gap-3">
-              <Link
-                href={`/facility/${selectedBusiness.id}`}
-                target="_blank"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#163B65] hover:bg-white rounded-xl transition border border-gray-200"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open Public Facility Profile</span>
-              </Link>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                {selectedBusiness.verification_status !== 'verified' && (
-                  <button
-                    type="button"
-                    disabled={isUpdatingStatus}
-                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'verified')}
-                    className="px-4 py-2 bg-[#4AB057] hover:bg-[#3ea04a] text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {isUpdatingStatus ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                    <span>Approve & Verify</span>
-                  </button>
-                )}
-
-                {selectedBusiness.verification_status !== 'rejected' && (
-                  <button
-                    type="button"
-                    disabled={isUpdatingStatus}
-                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'rejected')}
-                    className="px-4 py-2 bg-white hover:bg-rose-50 text-[#DC2626] border border-[#DC2626] text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {isUpdatingStatus ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <X className="w-3.5 h-3.5" />
-                    )}
-                    <span>Reject Facility</span>
-                  </button>
-                )}
-
-                {selectedBusiness.verification_status === 'verified' && (
-                  <button
-                    type="button"
-                    disabled={isUpdatingStatus}
-                    onClick={() => handleUpdateStatus(selectedBusiness.id, 'unverified')}
-                    className="px-3.5 py-2 text-xs font-semibold text-gray-600 border border-gray-200 bg-white hover:bg-gray-100 rounded-xl transition cursor-pointer disabled:opacity-50"
-                  >
-                    Unverify
-                  </button>
-                )}
-
+            <div
+              className="bg-white rounded-2xl sm:rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-200 my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Frame 140: Dialog Header */}
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#121313]">
+                  Business Details
+                </h2>
                 <button
                   type="button"
                   onClick={() => setSelectedBusiness(null)}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-xl transition cursor-pointer"
+                  className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                  title="Close dialog"
                 >
-                  Close
+                  <X className="w-5 h-5" />
                 </button>
+              </div>
+
+              {/* Scrollable Modal Body */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-6">
+                {/* Frame 151 / 105: Facility Banner Card */}
+                <div className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col sm:flex-row gap-4 sm:gap-5 items-start sm:items-center shadow-2xs">
+                  {/* Facility Image */}
+                  <div className="w-full sm:w-72 h-44 shrink-0 rounded-xl overflow-hidden bg-gray-100 relative border border-gray-100">
+                    <img
+                      src={photoUrl}
+                      alt={selectedBusiness.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2.5 left-2.5">
+                      <VerificationBadge status={selectedBusiness.verification_status} />
+                    </div>
+                  </div>
+
+                  {/* Facility Quick Information (Frame 152) */}
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg sm:text-xl font-bold text-[#121313] leading-snug">
+                        {selectedBusiness.name}
+                      </h3>
+                      {/* Category Pill (Frame 153) */}
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-[#BFDBFE] text-[#163B65]">
+                        {selectedBusiness.category?.name || details?.facility_type || 'Clinic'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs sm:text-sm text-gray-600">
+                      {/* Location (Frame 154) */}
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span className="truncate">
+                          {selectedBusiness.town ? `${selectedBusiness.town}, ` : ''}
+                          {selectedBusiness.county || 'Liberia'}
+                        </span>
+                      </div>
+
+                      {/* Phone (Frame 155) */}
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                        {selectedBusiness.phone ? (
+                          <a
+                            href={`tel:${selectedBusiness.phone}`}
+                            className="text-gray-700 hover:text-blue-600 font-medium"
+                          >
+                            {selectedBusiness.phone}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">Not provided</span>
+                        )}
+                      </div>
+
+                      {/* Website (Frame 156) */}
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-gray-400 shrink-0" />
+                        {selectedBusiness.website_url ? (
+                          <a
+                            href={
+                              selectedBusiness.website_url.startsWith('http')
+                                ? selectedBusiness.website_url
+                                : `https://${selectedBusiness.website_url}`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#1D4ED8] hover:underline font-medium truncate max-w-xs"
+                          >
+                            {selectedBusiness.website_url}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">Not provided</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Frame 148: Tab Navigation */}
+                <div className="flex items-center gap-8 border-b border-gray-200 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setDialogTab('overview')}
+                    className={`pb-3 text-sm sm:text-base transition cursor-pointer ${
+                      dialogTab === 'overview'
+                        ? 'text-[#1D4ED8] font-bold border-b-2 border-[#1D4ED8]'
+                        : 'text-gray-500 hover:text-gray-800 font-semibold border-b-2 border-transparent'
+                    }`}
+                  >
+                    Overview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDialogTab('documents')}
+                    className={`pb-3 text-sm sm:text-base transition cursor-pointer flex items-center gap-1.5 ${
+                      dialogTab === 'documents'
+                        ? 'text-[#1D4ED8] font-bold border-b-2 border-[#1D4ED8]'
+                        : 'text-gray-500 hover:text-gray-800 font-semibold border-b-2 border-transparent'
+                    }`}
+                  >
+                    <span>Documents</span>
+                    {documents.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-700 font-bold">
+                        {documents.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Frame 106: Main Tab Content */}
+                {dialogTab === 'overview' ? (
+                  <div className="border border-black/15 rounded-2xl p-5 sm:p-6 bg-white space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      {/* Left Column (Frame 145): Business & Owner Info */}
+                      <div className="lg:col-span-8 space-y-6">
+                        {/* Section 1: Business Information */}
+                        <div className="space-y-3.5">
+                          <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                            Business Information
+                          </h4>
+
+                          <div className="divide-y divide-gray-100 text-xs sm:text-sm">
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Business Name</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {selectedBusiness.name}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Business Address</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {selectedBusiness.address ||
+                                  `${selectedBusiness.town ? `${selectedBusiness.town}, ` : ''}${selectedBusiness.county || 'Liberia'}`}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Stethoscope className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Category</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {selectedBusiness.category?.name || details?.facility_type || 'Healthcare Facility'}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Phone Number</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {selectedBusiness.phone ? (
+                                  <a href={`tel:${selectedBusiness.phone}`} className="hover:text-blue-600 font-medium">
+                                    {selectedBusiness.phone}
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400">Not provided</span>
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Website</span>
+                              </span>
+                              <span className="font-semibold text-right">
+                                {selectedBusiness.website_url ? (
+                                  <a
+                                    href={
+                                      selectedBusiness.website_url.startsWith('http')
+                                        ? selectedBusiness.website_url
+                                        : `https://${selectedBusiness.website_url}`
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[#1D4ED8] hover:underline font-medium"
+                                  >
+                                    {selectedBusiness.website_url}
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400">Not provided</span>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Section 2: Business Owner Information */}
+                        <div className="space-y-3.5 pt-2 border-t border-gray-100">
+                          <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                            Business Owner Information
+                          </h4>
+
+                          <div className="divide-y divide-gray-100 text-xs sm:text-sm">
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <UserIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Owner Name</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {owner?.full_name || 'System / Government Administrator'}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Email Address</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {owner?.email || selectedBusiness.public_email || 'None registered'}
+                              </span>
+                            </div>
+
+                            <div className="py-2.5 flex items-center justify-between gap-4">
+                              <span className="text-gray-500 flex items-center gap-2">
+                                <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>Phone Number</span>
+                              </span>
+                              <span className="font-semibold text-gray-900 text-right">
+                                {owner?.phone || selectedBusiness.phone || 'None registered'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Healthcare Facility Specifications & Emergency Status */}
+                        {details && (
+                          <div className="space-y-3 pt-2 border-t border-gray-100">
+                            <h4 className="text-xs uppercase tracking-wider font-bold text-[#163B65]">
+                              Clinical & Operating Specifications
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                              <div>
+                                <span className="text-gray-400 block font-medium">Facility Level / Type</span>
+                                <span className="font-bold text-gray-800">
+                                  {details.facility_type || selectedBusiness.category?.name || 'Healthcare Facility'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block font-medium">Registration / License #</span>
+                                <span className="font-mono font-bold text-gray-800">
+                                  {details.registration_number || 'Not registered / Pending'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block font-medium">Emergency Care</span>
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] mt-0.5 ${
+                                    details.emergency_services
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  {details.emergency_services ? '24/7 Emergency Care' : 'Standard Routine Hours'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block font-medium">Opening Hours</span>
+                                <span className="font-bold text-gray-800">
+                                  {details.opening_hours_raw || 'Standard clinic hours'}
+                                </span>
+                              </div>
+                              {details.services && details.services.length > 0 && (
+                                <div className="sm:col-span-2 space-y-1 pt-1">
+                                  <span className="text-gray-400 block font-medium">Services Offered</span>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {details.services.map((svc, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="px-2 py-0.5 rounded-md bg-white border border-gray-200 text-gray-700 text-[11px] font-medium"
+                                      >
+                                        {svc}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {selectedBusiness.latitude !== null &&
+                                selectedBusiness.latitude !== undefined &&
+                                selectedBusiness.longitude !== null &&
+                                selectedBusiness.longitude !== undefined && (
+                                  <div className="sm:col-span-2 pt-1 flex items-center justify-between">
+                                    <span className="text-gray-400">
+                                      GPS: {selectedBusiness.latitude.toFixed(4)}, {selectedBusiness.longitude.toFixed(4)}
+                                    </span>
+                                    <a
+                                      href={`https://maps.google.com/?q=${selectedBusiness.latitude},${selectedBusiness.longitude}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline font-semibold"
+                                    >
+                                      View on Google Maps &rarr;
+                                    </a>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right Column (Frame 69): Document Card */}
+                      <div className="lg:col-span-4 flex flex-col">
+                        <div className="bg-[#DBEAFE] rounded-2xl p-5 border border-blue-200/80 flex flex-col items-center text-center space-y-3.5 shadow-2xs">
+                          <div className="w-16 h-16 rounded-2xl bg-white text-[#1D4ED8] shadow-xs flex items-center justify-center">
+                            <FileText className="w-8 h-8" />
+                          </div>
+
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-gray-900 text-sm sm:text-base">
+                              Registration Certificate
+                            </h5>
+                            <p className="text-xs text-[#163B65]/80">
+                              Official Ministry of Health or legal operating registration
+                            </p>
+                          </div>
+
+                          <div className="bg-white/90 rounded-xl px-3 py-2 w-full text-xs font-mono text-gray-700 border border-blue-100">
+                            <span className="text-[10px] text-gray-400 block uppercase font-sans font-bold">
+                              Registration / License No.
+                            </span>
+                            <span className="font-bold text-gray-900">
+                              {details?.registration_number || 'LIB-MOH-PENDING'}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setDialogTab('documents')}
+                            className="w-full py-2 px-3.5 bg-[#1D4ED8] hover:bg-[#1e40af] text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Inspect Documentation</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Documents Tab View */
+                  <div className="border border-black/15 rounded-2xl p-5 sm:p-6 bg-white space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-base sm:text-lg font-bold text-[#121313]">
+                        Accreditation & Legal Documentation
+                      </h4>
+                      <span className="text-xs text-gray-500 font-medium">
+                        Verification status: <strong className="capitalize text-gray-800">{selectedBusiness.verification_status}</strong>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Document Card: Operating License */}
+                      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-blue-100 text-[#1D4ED8] flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <h5 className="font-bold text-gray-900 text-xs sm:text-sm truncate">
+                            Ministry of Health Operating Permit
+                          </h5>
+                          <p className="text-[11px] text-gray-500 font-mono truncate">
+                            License #{details?.registration_number || 'Pending Assignment'}
+                          </p>
+                          <div className="pt-2 flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              selectedBusiness.verification_status === 'verified'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {selectedBusiness.verification_status === 'verified' ? 'Verified Permit' : 'Awaiting Approval'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Document Card: Business Profile Dossier */}
+                      <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/60 flex items-start gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <h5 className="font-bold text-gray-900 text-xs sm:text-sm truncate">
+                            Facility Registration Record
+                          </h5>
+                          <p className="text-[11px] text-gray-500 font-mono truncate">
+                            Submitted: {formatSubmissionDate(selectedBusiness.created_at)}
+                          </p>
+                          <div className="pt-2 flex items-center gap-2">
+                            <Link
+                              href={`/facility/${selectedBusiness.id}`}
+                              target="_blank"
+                              className="text-[11px] font-bold text-blue-700 hover:underline flex items-center gap-1"
+                            >
+                              <span>Inspect Live Record</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Any supplemental documents */}
+                    {documents.length > 0 ? (
+                      <div className="space-y-2 pt-2">
+                        <span className="text-xs font-bold text-gray-700 block">Uploaded Attachments</span>
+                        <div className="space-y-2">
+                          {documents.map((doc) => (
+                            <div key={doc.id} className="p-3 rounded-lg border border-gray-200 bg-white flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4 text-blue-600" />
+                                <span className="font-semibold text-gray-800">{doc.document_type}</span>
+                                <span className="text-gray-400 font-mono text-[11px]">({doc.storage_path})</span>
+                              </div>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 capitalize">
+                                {doc.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic pt-1">
+                        No additional supplemental attachment files uploaded with this listing submission.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Frame 150: Action Footer */}
+              <div className="px-6 py-4 border-t border-gray-100 bg-[#F8FAFC] flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+                <Link
+                  href={`/facility/${selectedBusiness.id}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-[#163B65] hover:bg-white rounded-xl transition border border-gray-200"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Public Listing</span>
+                </Link>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+                  {/* Reject Button (Frame 150 Designer Style: Red outline #B91C1C) */}
+                  {selectedBusiness.verification_status !== 'rejected' && (
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus(selectedBusiness.id, 'rejected')}
+                      className="border-1.5 border-[#B91C1C] text-[#B91C1C] hover:bg-rose-50 font-bold rounded-lg px-8 py-2.5 text-base transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isUpdatingStatus ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <X className="w-4 h-4" />
+                      )}
+                      <span>Reject</span>
+                    </button>
+                  )}
+
+                  {/* Approve Button (Frame 150 Designer Style: Green solid #15803D) */}
+                  {selectedBusiness.verification_status !== 'verified' && (
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus(selectedBusiness.id, 'verified')}
+                      className="bg-[#15803D] hover:bg-[#166534] text-white font-bold rounded-lg px-8 py-2.5 text-base transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      {isUpdatingStatus ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      <span>Approve</span>
+                    </button>
+                  )}
+
+                  {/* Unverify secondary button if already verified */}
+                  {selectedBusiness.verification_status === 'verified' && (
+                    <button
+                      type="button"
+                      disabled={isUpdatingStatus}
+                      onClick={() => handleUpdateStatus(selectedBusiness.id, 'unverified')}
+                      className="px-4 py-2 text-xs font-semibold text-gray-600 border border-gray-300 bg-white hover:bg-gray-100 rounded-lg transition cursor-pointer disabled:opacity-50"
+                    >
+                      Unverify
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBusiness(null)}
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-lg transition cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

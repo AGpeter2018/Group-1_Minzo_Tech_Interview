@@ -547,13 +547,21 @@ function SearchPageContent() {
                         </div>
 
                         {/* Location */}
-                        <div className="flex items-center gap-2 text-sm md:text-base text-gray-800">
-                          <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
-                          <span className="line-clamp-1 font-medium">
-                            {facility.town
-                              ? `${facility.town}, ${facility.county}`
-                              : facility.county}
-                          </span>
+                        <div className="flex items-center justify-between gap-2 text-sm md:text-base text-gray-800">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
+                            <span className="line-clamp-1 font-medium">
+                              {facility.town
+                                ? `${facility.town}, ${facility.county}`
+                                : facility.county}
+                            </span>
+                          </div>
+                          {facility.distanceKm !== undefined && (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                              <Navigation className="w-3 h-3 text-emerald-600" />
+                              <span>{facility.distanceKm} km</span>
+                            </span>
+                          )}
                         </div>
 
                         {/* Phone */}
