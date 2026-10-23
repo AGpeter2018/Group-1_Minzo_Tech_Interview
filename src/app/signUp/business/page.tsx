@@ -406,6 +406,7 @@ const BusinessSignUp = () => {
                   minLength={6}
                   autoComplete="new-password"
                   value={password}
+                  placeholder="e.g. ********"
                   onChange={(event) => setPassword(event.target.value)}
                   className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#D5DDE5]"
                 />
@@ -424,6 +425,7 @@ const BusinessSignUp = () => {
                   required
                   minLength={6}
                   autoComplete="new-password"
+                  placeholder="e.g. ********"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   className="h-11 w-full rounded-sm border border-[#D5DDE5] px-3 text-sm outline-none transition focus:border-[#3979A8] focus:ring-2 focus:ring-[#DCEAF3]"
