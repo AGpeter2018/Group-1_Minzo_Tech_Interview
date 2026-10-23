@@ -8,7 +8,7 @@ const supabaseKey = (
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwYnJzc3p6aG5uYmdqaXNtdWhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NTE0MzMsImV4cCI6MjEwNzQyNzQzM30.TwfOPxGiXKJGiHXIjgH_qmBH7CRwXcasy0J6OlmKcWM'
 ).replace(/^public-/, '').trim();
 
-export const createClient = (request: NextRequest) => {
+export const updateSession = async (request: NextRequest) => {
   // Create an unmodified response
   let supabaseResponse = NextResponse.next({
     request: {
@@ -37,5 +37,10 @@ export const createClient = (request: NextRequest) => {
     },
   );
 
+  // Refresh user session by invoking getUser
+  await supabase.auth.getUser();
+
   return supabaseResponse;
 };
+
+export const createClient = updateSession;

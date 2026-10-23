@@ -20,3 +20,4 @@ export const getServiceSupabase = () => {
   ).replace(/^public-/, '').trim();
   return createClient(supabaseUrl, serviceKey);
 };
+
